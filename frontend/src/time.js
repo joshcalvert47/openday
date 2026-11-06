@@ -176,3 +176,18 @@ export function parseTime(text, timeFormat, partial = false) {
   }
   return [h * 60 + m];
 }
+
+// Notification times, in minutes before the event start.
+// "At time of event", "10 minutes before", "1 hour before", "2 days before", "1 week before".
+export function formatReminder(minutes) {
+  if (minutes === 0) return 'At time of event';
+  const units = [
+    [7 * 24 * 60, 'week'],
+    [24 * 60, 'day'],
+    [60, 'hour'],
+    [1, 'minute'],
+  ];
+  const [size, name] = units.find(([u]) => minutes % u === 0);
+  const n = minutes / size;
+  return `${n} ${name}${n === 1 ? '' : 's'} before`;
+}

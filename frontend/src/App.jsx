@@ -13,6 +13,9 @@ import ContextMenu from './components/ContextMenu.jsx';
 import SettingsPage from './components/SettingsPage.jsx';
 import AppearanceDialog from './components/AppearanceDialog.jsx';
 import Snackbar from './components/Snackbar.jsx';
+import NotificationAlert from './components/NotificationAlert.jsx';
+import { describeWhen } from './components/EventDetails.jsx';
+import { useNotifications } from './notifications.js';
 import { useMedia, NARROW, PHONE } from './useMedia.js';
 
 const DEFAULT_SETTINGS = {
@@ -21,6 +24,10 @@ const DEFAULT_SETTINGS = {
   timeZone: '',
   defaultDuration: 60,
   theme: 'system',
+  notifications: 'desktop',
+  snoozeBefore: 1,
+  notificationSound: true,
+  defaultReminder: 30,
 };
 
 const VIEWS = ['day', 'week', 'month', 'year'];
@@ -108,6 +115,12 @@ export default function App() {
   useEffect(() => {
     if (!formOpen) setDocked(false);
   }, [formOpen]);
+
+  const describe = (event) => describeWhen(event, tz, settings);
+  const { alerts, dismissAlerts } = useNotifications({ settings, describe, changeKey: events });
+  const alertBox = alerts.length > 0 && (
+    <NotificationAlert alerts={alerts} describe={describe} onClose={dismissAlerts} />
+  );
 
   const showError = useCallback((err) => setSnack({ text: err.message || String(err) }), []);
 
@@ -220,7 +233,14 @@ export default function App() {
     setDraft((d) =>
       d && !d.id
         ? { ...d, start, end }
-        : { title: '', description: '', color: DEFAULT_COLOR, start, end },
+        : {
+            title: '',
+            description: '',
+            color: DEFAULT_COLOR,
+            start,
+            end,
+            reminders: settings.defaultReminder >= 0 ? [settings.defaultReminder] : [],
+          },
     );
     setEditorAnchor(anchor || null);
   };
@@ -350,6 +370,10 @@ export default function App() {
   // ---- Keyboard shortcuts (like the classic calendar ones) ----
   const keyHandler = useRef(null);
   keyHandler.current = (e) => {
+    if (alerts.length) {
+      if (e.key === 'Escape') dismissAlerts();
+      return;
+    }
     if (e.key === 'Escape') {
       if (menu || details) closePopups();
       else if (appearanceOpen) setAppearanceOpen(false);
@@ -383,6 +407,7 @@ export default function App() {
       <>
         <SettingsPage settings={settings} onChange={updateSettings} onBack={() => setPage('calendar')} />
         {snack && <Snackbar {...snack} onClose={() => setSnack(null)} />}
+        {alertBox}
       </>
     );
   }
@@ -520,6 +545,7 @@ export default function App() {
         />
       )}
       {snack && <Snackbar {...snack} onClose={() => setSnack(null)} />}
+      {alertBox}
     </div>
   );
 }

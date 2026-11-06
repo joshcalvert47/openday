@@ -1,11 +1,42 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import Icon from '../icons.jsx';
 import Select from './Select.jsx';
 import SearchSelect from './SearchSelect.jsx';
 import { ThemeOptions } from './AppearanceDialog.jsx';
 import * as T from '../time.js';
+import { REMINDER_PRESETS, notificationPermission, requestNotificationPermission, playChime } from '../notifications.js';
 
 const DURATIONS = [15, 20, 30, 45, 60, 90, 120];
+const SNOOZE_OPTIONS = [0, 1, 5, 10, 15, 30];
+
+const NOTIFY_OPTIONS = [
+  { value: 'off', label: 'Off' },
+  { value: 'desktop', label: 'Desktop notifications' },
+  { value: 'alerts', label: 'Alerts' },
+];
+
+// Explains why desktop notifications cannot show, and offers to allow them.
+function PermissionNote({ permission, onAllow }) {
+  if (permission === 'granted') return null;
+  if (permission === 'default') {
+    return (
+      <p className="settings-note">
+        Your browser needs your permission to show notifications.{' '}
+        <button type="button" className="text-btn inline" onClick={onAllow}>
+          Allow notifications
+        </button>
+      </p>
+    );
+  }
+  return (
+    <p className="settings-note">
+      {permission === 'denied'
+        ? 'Notifications are blocked for this site in your browser settings.'
+        : 'This browser cannot show desktop notifications here (it needs HTTPS or localhost).'}{' '}
+      Reminders are shown as alerts in the page instead.
+    </p>
+  );
+}
 
 function Field({ label, children }) {
   return (
@@ -25,6 +56,8 @@ export default function SettingsPage({ settings, onChange, onBack }) {
     [],
   );
   const sample = T.makeDay(2026, 11, 31) + 13 * T.HOUR;
+  const [permission, setPermission] = useState(notificationPermission);
+  const askPermission = async () => setPermission(await requestNotificationPermission());
 
   return (
     <div className="settings">
@@ -39,6 +72,7 @@ export default function SettingsPage({ settings, onChange, onBack }) {
       <div className="settings-body">
         <nav className="settings-nav">
           <a href="#general" className="settings-nav-item">General</a>
+          <a href="#notifications" className="settings-nav-item">Notification settings</a>
           <a href="#appearance" className="settings-nav-item">Appearance</a>
         </nav>
         <div className="settings-content">
@@ -77,6 +111,52 @@ export default function SettingsPage({ settings, onChange, onBack }) {
                 }))}
               />
             </Field>
+            <Field label="Default notification">
+              <Select
+                value={settings.defaultReminder}
+                onChange={(defaultReminder) => onChange({ defaultReminder })}
+                options={[
+                  { value: -1, label: 'No notification' },
+                  ...REMINDER_PRESETS.map((m) => ({ value: m, label: T.formatReminder(m) })),
+                ]}
+              />
+            </Field>
+          </section>
+
+          <section id="notifications">
+            <h2>Notification settings</h2>
+            <Field label="Notifications">
+              <Select
+                value={settings.notifications}
+                onChange={(notifications) => {
+                  onChange({ notifications });
+                  if (notifications === 'desktop' && permission === 'default') askPermission();
+                }}
+                options={NOTIFY_OPTIONS}
+              />
+            </Field>
+            {settings.notifications === 'desktop' && <PermissionNote permission={permission} onAllow={askPermission} />}
+            <Field label="Show snoozed notifications">
+              <Select
+                value={settings.snoozeBefore}
+                onChange={(snoozeBefore) => onChange({ snoozeBefore })}
+                options={SNOOZE_OPTIONS.map((m) => ({
+                  value: m,
+                  label: m === 0 ? 'At time of event' : `${m} minute${m === 1 ? '' : 's'} before event`,
+                }))}
+              />
+            </Field>
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={settings.notificationSound}
+                onChange={(e) => {
+                  onChange({ notificationSound: e.target.checked });
+                  if (e.target.checked) playChime();
+                }}
+              />
+              <span>Play notification sounds</span>
+            </label>
           </section>
 
           <section id="appearance">

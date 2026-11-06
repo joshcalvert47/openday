@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -122,9 +123,78 @@ func TestSettings(t *testing.T) {
 		t.Fatalf("after put: %+v", s)
 	}
 
-	for _, b := range []string{`{"timeZone":"Mars/Base"}`, `{"defaultDuration":7}`, `{"theme":"blue"}`} {
+	code, body = do(t, srv, "PUT", "/api/settings", `{"notifications":"alerts","snoozeBefore":10,"notificationSound":false,"defaultReminder":-1}`)
+	if code != http.StatusOK {
+		t.Fatalf("put notifications: %d %s", code, body)
+	}
+	_ = json.Unmarshal([]byte(body), &s)
+	if s.Notifications != "alerts" || s.SnoozeBefore != 10 || s.NotificationSound || s.DefaultReminder != -1 {
+		t.Fatalf("after notification put: %+v", s)
+	}
+
+	for _, b := range []string{`{"timeZone":"Mars/Base"}`, `{"defaultDuration":7}`, `{"theme":"blue"}`,
+		`{"notifications":"loud"}`, `{"snoozeBefore":2}`, `{"defaultReminder":7}`} {
 		if code, _ := do(t, srv, "PUT", "/api/settings", b); code != http.StatusBadRequest {
 			t.Errorf("expected 400 for %s, got %d", b, code)
 		}
+	}
+}
+
+func TestEventReminders(t *testing.T) {
+	srv := newTestServer(t)
+
+	// Old clients that send no reminders get an empty list.
+	code, body := do(t, srv, "POST", "/api/events",
+		`{"title":"A","start":"2026-11-06T12:00:00Z","end":"2026-11-06T13:00:00Z"}`)
+	if code != http.StatusCreated || !strings.Contains(body, `"reminders":[]`) {
+		t.Fatalf("create without reminders: %d %s", code, body)
+	}
+
+	// Duplicates are removed and the list is sorted.
+	code, body = do(t, srv, "POST", "/api/events",
+		`{"title":"B","start":"2026-11-06T12:00:00Z","end":"2026-11-06T13:00:00Z","reminders":[30,10,30,0]}`)
+	if code != http.StatusCreated || !strings.Contains(body, `"reminders":[0,10,30]`) {
+		t.Fatalf("create with reminders: %d %s", code, body)
+	}
+	_, body = do(t, srv, "GET", "/api/events?start=2026-11-06T00:00:00Z&end=2026-11-07T00:00:00Z", "")
+	if !strings.Contains(body, `"reminders":[0,10,30]`) {
+		t.Fatalf("list should keep reminders: %s", body)
+	}
+
+	for _, b := range []string{
+		`{"title":"x","start":"2026-11-06T12:00:00Z","end":"2026-11-06T13:00:00Z","reminders":[-1]}`,
+		`{"title":"x","start":"2026-11-06T12:00:00Z","end":"2026-11-06T13:00:00Z","reminders":[99999999]}`,
+		`{"title":"x","start":"2026-11-06T12:00:00Z","end":"2026-11-06T13:00:00Z","reminders":[1,2,3,4,5,6]}`,
+	} {
+		if code, body := do(t, srv, "POST", "/api/events", b); code != http.StatusBadRequest {
+			t.Errorf("expected 400 for %s, got %d %s", b, code, body)
+		}
+	}
+}
+
+func TestMigrateAddsReminders(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "old.db")
+	db, err := sql.Open("sqlite", "file:"+path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The events table as it was before reminders existed.
+	if _, err := db.Exec(`CREATE TABLE events (
+		id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '',
+		color TEXT NOT NULL DEFAULT '', start_ms INTEGER NOT NULL, end_ms INTEGER NOT NULL,
+		created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
+		INSERT INTO events (title, start_ms, end_ms, created_at, updated_at) VALUES ('old', 0, 1000, 0, 0);`); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+
+	store, err := OpenStore(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	e, err := store.GetEvent(1)
+	if err != nil || e.Title != "old" || e.Reminders == nil || len(e.Reminders) != 0 {
+		t.Fatalf("old event after migration: %+v %v", e, err)
 	}
 }

@@ -13,7 +13,7 @@ When making product or UI decisions, the default answer is: **do what Google Cal
 
 ## Project status
 
-First working version: day/week/month/year views, events (create, edit, move, resize, color, delete), settings, light/dark theme.
+First working version: day/week/month/year views, events (create, edit, move, resize, color, delete), notifications, settings, light/dark theme.
 
 Commands:
 
@@ -56,7 +56,16 @@ How the app works:
 
 - API lives under `/api` (`backend/api.go`): `GET/POST /api/events`, `PUT/DELETE /api/events/{id}`, `GET/PUT /api/settings`, `GET /api/health`.
 - Events are stored as UTC Unix milliseconds. The frontend shows them in the time zone from settings.
-- Settings (date format, time format, time zone, default duration, theme) are stored in the database, so they follow the user across browsers.
+- Settings (date format, time format, time zone, default duration, default notification, notification settings, theme) are stored in the database, so they follow the user across browsers.
+- Notifications (`frontend/src/notifications.js`):
+  - Each event has `reminders`: up to 5 times in minutes before the start (0 to 4 weeks). Stored as a JSON array in the `reminders` column (added by `migrate` in `store.go` for older databases).
+  - New events get the "Default notification" from settings.
+  - The page checks every 10 seconds which reminders are due. There is no server push, so a calendar tab must be open. Reminders more than 10 minutes late are skipped.
+  - "Notifications" setting: Off, Desktop notifications (browser `Notification` API), or Alerts (dialog in the page). If the browser blocks desktop notifications, alerts are used instead.
+  - Desktop notifications are shown by a small service worker (`frontend/public/sw.js`) so they can have a Snooze button. A snoozed notification shows again "Show snoozed notifications" minutes before the event (or 5 minutes later if that time has passed).
+  - "Play notification sounds": a short chime made with Web Audio (no sound file).
+  - Shown reminders and snoozes are kept in `localStorage`, so a reminder shows once even with several tabs open or after a reload.
+  - Desktop notifications need HTTPS or `localhost` (browser rule). Headless Chromium always denies them, so tests stub `Notification.permission` and `showNotification`.
 - Small per-browser preferences (current view, sidebar open) are kept in `localStorage`.
 - Drop-downs: no browser `<select>`. Use `Select.jsx` (styled list, keyboard and type-ahead). Long lists (time zones) use `SearchSelect.jsx`: type to search, the list scrolls to the best match in real time (nothing is hidden). Lists are drawn by `DropdownList.jsx` in `document.body` and follow their field (e.g. when the form is dragged).
 - Event times use `TimeInput.jsx`: pick from the list or type any time ("9", "930", "9:30pm", "21:15"). While typing, the list scrolls to the closest option. Typed text is read by `parseTime` in `time.js`. In 12h format, a time without am/pm picks the one closest to the current start (start field) or the first one after the start (end field).
