@@ -7,6 +7,7 @@ import ColorPicker from './ColorPicker.jsx';
 import TimeInput from './TimeInput.jsx';
 import ReminderList from './ReminderList.jsx';
 import Select from './Select.jsx';
+import { calendarZone } from '../calendars.js';
 import * as T from '../time.js';
 import { useMedia, TOUCH } from '../useMedia.js';
 
@@ -64,7 +65,8 @@ export default function EventEditor({
   // (9am stays 9am, now in the new zone).
   const setZone = (z) => {
     const ntz = z || tz;
-    onChange({ timeZone: z, start: T.fromWall(ws, ntz), end: T.fromWall(we, ntz) });
+    // zoneSet: picked by hand, so changing the calendar no longer changes it.
+    onChange({ timeZone: z, zoneSet: true, start: T.fromWall(ws, ntz), end: T.fromWall(we, ntz) });
   };
 
   const fmt = (t) => T.formatTime(t, tf, { compact: false });
@@ -198,7 +200,13 @@ export default function EventEditor({
             aria-label="Calendar"
             value={draft.calendarId}
             options={calendars.map((c) => ({ value: c.id, label: c.name, color: c.color }))}
-            onChange={(calendarId) => onChange({ calendarId })}
+            onChange={(calendarId) => {
+              // A new event takes the time zone of its calendar (same moment,
+              // shown in that zone), until the user picks a time zone by hand.
+              if (isNew && !draft.zoneSet) {
+                onChange({ calendarId, timeZone: calendarZone(calendars.find((c) => c.id === calendarId), tz) });
+              } else onChange({ calendarId });
+            }}
           />
         </div>
       </div>

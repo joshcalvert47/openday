@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from './api.js';
 import * as T from './time.js';
 import { colorOf } from './colors.js';
+import { calendarZone, sortCalendars } from './calendars.js';
 import Header from './components/Header.jsx';
 import Sidebar from './components/Sidebar.jsx';
 import TimeGrid from './components/TimeGrid.jsx';
@@ -37,16 +38,6 @@ const DEFAULT_SETTINGS = {
 };
 
 const VIEWS = ['day', 'week', 'month', 'year'];
-
-// Same order as the server: the primary calendar first, then by name.
-function sortCalendars(list) {
-  return [...list].sort(
-    (a, b) =>
-      Number(b.primary) - Number(a.primary) ||
-      a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }) ||
-      a.id - b.id,
-  );
-}
 
 // Small per-browser preferences (current view, sidebar open).
 function useLocalState(key, initial) {
@@ -343,7 +334,7 @@ export default function App() {
         ? { ...d, start, end }
         : {
             calendarId: primaryCal?.id || 0,
-            timeZone: '', // the primary time zone
+            timeZone: calendarZone(primaryCal, tz), // the calendar's time zone
             title: '',
             description: '',
             color: '', // calendar color
