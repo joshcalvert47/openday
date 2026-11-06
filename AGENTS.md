@@ -58,6 +58,7 @@ How the app works:
 - Calendars (like "My calendars" in the classic calendar):
   - Table `calendars`: name, description, color, `time_zone`, `hidden`, `is_primary`. Every event has a `calendar_id`.
   - Calendar time zone: an IANA name, or `''` for "same as the primary time zone". It is saved and can be changed, but the calendar views still use the primary time zone (like the classic calendar).
+  - The calendar time zone drop-down (create form and calendar page) offers only the primary time zone and the "Other time zones" from General settings (plus the calendar's own, if it was removed from settings since). A link under it opens General → Time zone to add more.
   - There is always one primary calendar ("My calendar", made by `migrate` in `store.go`). It is listed first and cannot be deleted. New events go to it. An event sent without `calendarId` also goes to it.
   - `migrate` puts events from older databases in the primary calendar. Their color `#039be5` (the old default) becomes `''`.
   - Event color `''` means "use the calendar color" (`colorOf(event, calendar)` in `colors.js`). New events use it. The color picker shows it as the first swatch.
@@ -65,7 +66,7 @@ How the app works:
   - Deleting a calendar deletes its events (after a confirm dialog).
   - Sidebar: a colored checkbox shows or hides a calendar (`hidden` is saved in the database, so it follows the user). The ⋮ button (or right-click) opens "Display this only", "Settings" and colors (`CalendarMenu.jsx`). The + button opens Settings at "Create new calendar".
   - Settings page (`SettingsPage.jsx`) has separate pages, like the classic calendar. The left menu has groups that open and close: "General" (one scrolling page: date and time, time zone, events, notifications, appearance, keyboard shortcuts; the menu jumps to each part and marks the one in view), "Add calendar" → "Create new calendar", and "Settings for my calendars" → one page per calendar (`CalendarSettings.jsx`: name, description, time zone, color, delete).
-  - New calendars start with the primary time zone and a color no other calendar uses; both can be changed in the create form.
+  - New calendars start with "Same as primary time zone" and a color no other calendar uses; both can be changed in the create form.
   - Calendar fields save when they lose focus; time zone and color save right away.
   - Only one menu group is open at a time. Opening a page (group title or item) opens its group and closes the others. Groups open and close with a height animation (CSS `grid-template-rows`), off when animations are off.
   - Tablets and phones (≤900px): no settings menu. Settings opens the General page only. Calendar pages open from the sidebar only (+ → Create new calendar, ⋮ → Settings); the header then shows the page name. Back always returns to the calendar.
@@ -95,7 +96,7 @@ How the app works:
   - The "Show animations" setting (Settings → Appearance, stored as `animations`) sets `data-motion` on `<html>`. Off, or the device asks for reduced motion (`prefers-reduced-motion`): no animations at all.
   - Motion made in JavaScript (e.g. `scrollTo` with `behavior: 'smooth'`) must check `motionOn()` from `motion.js`, because the CSS rule cannot turn it off.
   - Keep animations short (about 150 to 200 ms). `EXIT_MS` in `motion.js` must be at least the longest closing animation.
-- Drop-downs: no browser `<select>`. Use `Select.jsx` (styled list, keyboard and type-ahead). Long lists (time zones) use `SearchSelect.jsx`: type to search, the list scrolls to the best match in real time (nothing is hidden). Lists are drawn by `DropdownList.jsx` in `document.body` and follow their field (e.g. when the form is dragged).
+- Drop-downs: no browser `<select>`. Use `Select.jsx` (styled list, keyboard and type-ahead). Long lists (time zones) use `SearchSelect.jsx`: type to search, the list scrolls to the best match in real time (nothing is hidden). Enter on typed text that matches nothing keeps the old value. A value not in the options shows the placeholder. Lists are drawn by `DropdownList.jsx` in `document.body` and follow their field (e.g. when the form is dragged).
 - Event times use `TimeInput.jsx`: pick from the list or type any time ("9", "930", "9:30pm", "21:15"). While typing, the list scrolls to the closest option. Typed text is read by `parseTime` in `time.js`. In 12h format, a time without am/pm picks the one closest to the current start (start field) or the first one after the start (end field).
 - The event form always opens floating. The user can dock it; it is never docked by default.
 - Phones and touch (breakpoints: 900px and 600px in `styles.css`):

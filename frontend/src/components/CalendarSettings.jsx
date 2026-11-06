@@ -1,19 +1,37 @@
 import { useEffect, useRef, useState } from 'react';
 import ColorPicker from './ColorPicker.jsx';
-import SearchSelect from './SearchSelect.jsx';
+import Select from './Select.jsx';
 import { unusedColor } from '../colors.js';
 import { useExit } from '../motion.js';
 import { useMedia, TOUCH } from '../useMedia.js';
 
 // Settings pages for calendars: "Create new calendar" and the settings of one
 // calendar (name, description, time zone, color, delete).
-// `zoneOptions`: time zones for SearchSelect ('' = same as the primary time zone).
+// `zoneOptions`: the primary time zone ('') and the other time zones from
+// General settings. `onAddZones` opens General → Time zone to add more.
+
+// The time zone choice, with a link to add more time zones in General settings.
+function ZoneField({ value, options, onChange, onAddZones }) {
+  return (
+    <div className="field">
+      <span className="field-label">Time zone</span>
+      <Select aria-label="Time zone" value={value} options={options} onChange={onChange} />
+      <p className="settings-note zone-note">
+        {options.length > 1 ? 'More time zones can be added in ' : 'To pick another time zone, add it first in '}
+        <button type="button" className="text-btn inline" onClick={onAddZones}>
+          General → Time zone
+        </button>
+        .
+      </p>
+    </div>
+  );
+}
 
 // New calendars start with the primary time zone and a color no other calendar uses.
-export function CreateCalendar({ calendars, defaultTimeZone, zoneOptions, autoFocus, onCreate }) {
+export function CreateCalendar({ calendars, zoneOptions, onAddZones, autoFocus, onCreate }) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [timeZone, setTimeZone] = useState(defaultTimeZone);
+  const [timeZone, setTimeZone] = useState('');
   const [color, setColor] = useState(() => unusedColor(calendars));
   const [busy, setBusy] = useState(false);
   const nameRef = useRef(null);
@@ -56,10 +74,7 @@ export function CreateCalendar({ calendars, defaultTimeZone, zoneOptions, autoFo
           onChange={(e) => setDescription(e.target.value)}
         />
       </label>
-      <label className="field">
-        <span className="field-label">Time zone</span>
-        <SearchSelect value={timeZone} onChange={setTimeZone} options={zoneOptions} />
-      </label>
+      <ZoneField value={timeZone} options={zoneOptions} onChange={setTimeZone} onAddZones={onAddZones} />
       <div className="field">
         <span className="field-label">Color</span>
         <ColorPicker value={color} onChange={setColor} label="Calendar color" />
@@ -73,7 +88,7 @@ export function CreateCalendar({ calendars, defaultTimeZone, zoneOptions, autoFo
 
 // Changes are saved when a field loses focus (Enter in the name too), and
 // right away for the time zone and color.
-export function CalendarSettings({ calendar, zoneOptions, onUpdate, onDelete }) {
+export function CalendarSettings({ calendar, zoneOptions, onAddZones, onUpdate, onDelete }) {
   const [name, setName] = useState(calendar.name);
   const [description, setDescription] = useState(calendar.description);
   const [confirm, setConfirm] = useState(false);
@@ -120,10 +135,12 @@ export function CalendarSettings({ calendar, zoneOptions, onUpdate, onDelete }) 
             onBlur={saveDescription}
           />
         </label>
-        <label className="field">
-          <span className="field-label">Time zone</span>
-          <SearchSelect value={calendar.timeZone || ''} onChange={(timeZone) => onUpdate({ timeZone })} options={zoneOptions} />
-        </label>
+        <ZoneField
+          value={zoneOptions.some((o) => o.value === calendar.timeZone) ? calendar.timeZone : ''}
+          options={zoneOptions}
+          onChange={(timeZone) => onUpdate({ timeZone })}
+          onAddZones={onAddZones}
+        />
         <div className="field">
           <span className="field-label">Color</span>
           <ColorPicker value={calendar.color} onChange={(color) => onUpdate({ color })} label="Calendar color" />

@@ -52,7 +52,9 @@ export default function SearchSelect({ value, options, onChange, className = '',
       setActive(Math.max(0, Math.min(last, active + (e.key === 'ArrowDown' ? 1 : -1))));
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      if (open) pick(options[active].value);
+      // Typed text that matches nothing: keep the old value.
+      if (open && text !== null && text.trim() && search(text) < 0) close();
+      else if (open) pick(options[active].value);
       else start();
     } else if (e.key === 'Escape' && open) {
       e.preventDefault();

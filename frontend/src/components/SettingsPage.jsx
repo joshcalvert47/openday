@@ -168,10 +168,18 @@ export default function SettingsPage({
     () => [{ value: '', label: `Device time zone (${T.browserTimeZone()})` }, ...allZones],
     [allZones],
   );
-  const calendarZoneOptions = useMemo(
-    () => [{ value: '', label: `Same as primary time zone (${primaryZone.replace(/_/g, ' ')})` }, ...allZones],
-    [allZones, primaryZone],
-  );
+  // A calendar's time zone: the primary one ('') or one of the "Other time
+  // zones" from General settings (plus the calendar's own, if it was removed
+  // from settings since).
+  const calendarZoneOptions = (current = '') => {
+    const now = Date.now();
+    const others = (settings.otherTimeZones || []).filter((z) => z !== primaryZone);
+    if (current && current !== primaryZone && !others.includes(current)) others.push(current);
+    return [
+      { value: '', label: `Same as primary time zone (${primaryZone.replace(/_/g, ' ')})` },
+      ...others.map((z) => ({ value: z, label: T.zoneLabel(z, now) })),
+    ];
+  };
   const sample = T.makeDay(2026, 11, 31) + 13 * T.HOUR;
   const [permission, setPermission] = useState(notificationPermission);
   const askPermission = async () => setPermission(await requestNotificationPermission());
@@ -296,8 +304,8 @@ export default function SettingsPage({
         <h2>Create new calendar</h2>
         <CreateCalendar
           calendars={calendars}
-          defaultTimeZone={primaryZone}
-          zoneOptions={calendarZoneOptions}
+          zoneOptions={calendarZoneOptions()}
+          onAddZones={() => go('general', 'time-zone')}
           autoFocus
           onCreate={createCalendar}
         />
@@ -308,7 +316,8 @@ export default function SettingsPage({
       <CalendarSettings
         key={calendar.id}
         calendar={calendar}
-        zoneOptions={calendarZoneOptions}
+        zoneOptions={calendarZoneOptions(calendar.timeZone === primaryZone ? '' : calendar.timeZone)}
+        onAddZones={() => go('general', 'time-zone')}
         onUpdate={(patch) => onUpdateCalendar(calendar.id, patch)}
         onDelete={() => onDeleteCalendar(calendar.id)}
       />
