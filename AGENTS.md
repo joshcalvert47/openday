@@ -56,18 +56,22 @@ How the app works:
 
 - API lives under `/api` (`backend/api.go`): `GET/POST /api/events`, `PUT/DELETE /api/events/{id}`, `GET/POST /api/calendars`, `PUT/DELETE /api/calendars/{id}`, `GET/PUT /api/settings`, `GET /api/health`.
 - Calendars (like "My calendars" in the classic calendar):
-  - Table `calendars`: name, description, color, `hidden`, `is_primary`. Every event has a `calendar_id`.
+  - Table `calendars`: name, description, color, `time_zone`, `hidden`, `is_primary`. Every event has a `calendar_id`.
+  - Calendar time zone: an IANA name, or `''` for "same as the primary time zone". It is saved and can be changed, but the calendar views still use the primary time zone (like the classic calendar).
   - There is always one primary calendar ("My calendar", made by `migrate` in `store.go`). It is listed first and cannot be deleted. New events go to it. An event sent without `calendarId` also goes to it.
   - `migrate` puts events from older databases in the primary calendar. Their color `#039be5` (the old default) becomes `''`.
   - Event color `''` means "use the calendar color" (`colorOf(event, calendar)` in `colors.js`). New events use it. The color picker shows it as the first swatch.
   - `PUT /api/calendars/{id}` changes only the fields that are sent (e.g. `{"hidden":true}`).
   - Deleting a calendar deletes its events (after a confirm dialog).
   - Sidebar: a colored checkbox shows or hides a calendar (`hidden` is saved in the database, so it follows the user). The ⋮ button (or right-click) opens "Display this only", "Settings" and colors (`CalendarMenu.jsx`). The + button opens Settings at "Create new calendar".
-  - Settings page: "Create new calendar" and one section per calendar (name, description, color, delete). Fields save when they lose focus.
+  - Settings page (`SettingsPage.jsx`) has separate pages, like the classic calendar. The left menu has groups that open and close: "General" (one scrolling page: date and time, time zone, events, notifications, appearance, keyboard shortcuts; the menu jumps to each part and marks the one in view), "Add calendar" → "Create new calendar", and "Settings for my calendars" → one page per calendar (`CalendarSettings.jsx`: name, description, time zone, color, delete).
+  - New calendars start with the primary time zone and a color no other calendar uses; both can be changed in the create form.
+  - Calendar fields save when they lose focus; time zone and color save right away.
+  - Tablets and phones (≤900px): the settings menu is its own page. Picking an item opens its page; the back arrow returns to the menu.
   - Saving an event into a hidden calendar shows that calendar again.
   - Hidden calendars still send notifications (like the classic calendar).
 - Events are stored as UTC Unix milliseconds. The frontend shows them in the time zone from settings.
-- Settings (date format, time format, time zone, default duration, default notification, notification settings, theme, animations) are stored in the database, so they follow the user across browsers.
+- Settings (date format, time format, time zone, default duration, default notification, notification settings, theme, animations, keyboard shortcuts) are stored in the database, so they follow the user across browsers.
 - Notifications (`frontend/src/notifications.js`):
   - Each event has `reminders`: up to 5 times in minutes before the start (0 to 4 weeks). Stored as a JSON array in the `reminders` column (added by `migrate` in `store.go` for older databases).
   - New events get the "Default notification" from settings.
@@ -98,6 +102,12 @@ How the app works:
   - Tap = click. Long press on an event = drag it, or open its menu if the finger does not move. Swipe left/right = next/previous period.
   - After a finger tap opens a card, the "ghost" click from the browser is cancelled (see `eatGhostClick` in `TimeGrid.jsx`).
   - Test with Playwright device emulation (e.g. `devices['Pixel 7']`) and touch events.
+- Keyboard shortcuts (like the classic calendar):
+  - Keys are handled in `App.jsx` (`keyHandler`). The list shown to the user is `SHORTCUT_GROUPS` in `frontend/src/shortcuts.js`; keep both in sync.
+  - `?` (or Settings menu → Keyboard shortcuts) opens `ShortcutsDialog.jsx`.
+  - Setting "Enable keyboard shortcuts" (Settings → Keyboard shortcuts, stored as `keyboardShortcuts`, on by default). Off: only `Esc` works, and tooltips/menus show no keys.
+  - When on, tooltips show the key ("Next week (J)", "Create (C)") and the view menu shows D/W/M/Y.
+  - Phones and touch devices: no key hints, no dialog, no settings section.
 - Environment variables: `OPENDAY_ADDR` (default `:8080`), `OPENDAY_DB` (default `openday.db`; `/data/openday.db` in Docker).
 
 ## Folder layout

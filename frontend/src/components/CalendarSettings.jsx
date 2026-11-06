@@ -1,15 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
 import ColorPicker from './ColorPicker.jsx';
+import SearchSelect from './SearchSelect.jsx';
 import { unusedColor } from '../colors.js';
 import { useExit } from '../motion.js';
 import { useMedia, TOUCH } from '../useMedia.js';
 
-// Settings page parts for calendars: "Create new calendar" and the settings
-// of one calendar (name, description, color, delete).
+// Settings pages for calendars: "Create new calendar" and the settings of one
+// calendar (name, description, time zone, color, delete).
+// `zoneOptions`: time zones for SearchSelect ('' = same as the primary time zone).
 
-export function CreateCalendar({ calendars, autoFocus, onCreate }) {
+// New calendars start with the primary time zone and a color no other calendar uses.
+export function CreateCalendar({ calendars, defaultTimeZone, zoneOptions, autoFocus, onCreate }) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [timeZone, setTimeZone] = useState(defaultTimeZone);
+  const [color, setColor] = useState(() => unusedColor(calendars));
   const [busy, setBusy] = useState(false);
   const nameRef = useRef(null);
   const touch = useMedia(TOUCH);
@@ -22,7 +27,7 @@ export function CreateCalendar({ calendars, autoFocus, onCreate }) {
     e.preventDefault();
     if (!name.trim() || busy) return;
     setBusy(true);
-    const created = await onCreate({ name: name.trim(), description, color: unusedColor(calendars) });
+    const created = await onCreate({ name: name.trim(), description, timeZone, color });
     setBusy(false);
     if (created) {
       setName('');
@@ -51,6 +56,14 @@ export function CreateCalendar({ calendars, autoFocus, onCreate }) {
           onChange={(e) => setDescription(e.target.value)}
         />
       </label>
+      <label className="field">
+        <span className="field-label">Time zone</span>
+        <SearchSelect value={timeZone} onChange={setTimeZone} options={zoneOptions} />
+      </label>
+      <div className="field">
+        <span className="field-label">Color</span>
+        <ColorPicker value={color} onChange={setColor} label="Calendar color" />
+      </div>
       <button type="submit" className="filled-btn" disabled={!name.trim() || busy}>
         Create calendar
       </button>
@@ -59,8 +72,8 @@ export function CreateCalendar({ calendars, autoFocus, onCreate }) {
 }
 
 // Changes are saved when a field loses focus (Enter in the name too), and
-// right away for the color.
-export function CalendarSettings({ calendar, onUpdate, onDelete }) {
+// right away for the time zone and color.
+export function CalendarSettings({ calendar, zoneOptions, onUpdate, onDelete }) {
   const [name, setName] = useState(calendar.name);
   const [description, setDescription] = useState(calendar.description);
   const [confirm, setConfirm] = useState(false);
@@ -81,45 +94,57 @@ export function CalendarSettings({ calendar, onUpdate, onDelete }) {
 
   return (
     <>
-      <label className="field">
-        <span className="field-label">Name</span>
-        <input
-          className="text-field"
-          value={name}
-          maxLength={200}
-          onChange={(e) => setName(e.target.value)}
-          onBlur={saveName}
-          onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
-        />
-      </label>
-      <label className="field">
-        <span className="field-label">Description</span>
-        <textarea
-          className="text-field"
-          rows={3}
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          onBlur={saveDescription}
-        />
-      </label>
-      <div className="field">
-        <span className="field-label">Color</span>
-        <ColorPicker value={calendar.color} onChange={(color) => onUpdate({ color })} label="Calendar color" />
-      </div>
+      <section id="calendar-settings">
+        <h2 className="cal-heading">
+          <span className="cal-dot" style={{ background: calendar.color }} />
+          <span className="cal-name">Calendar settings</span>
+        </h2>
+        <label className="field">
+          <span className="field-label">Name</span>
+          <input
+            className="text-field"
+            value={name}
+            maxLength={200}
+            onChange={(e) => setName(e.target.value)}
+            onBlur={saveName}
+            onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+          />
+        </label>
+        <label className="field">
+          <span className="field-label">Description</span>
+          <textarea
+            className="text-field"
+            rows={3}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            onBlur={saveDescription}
+          />
+        </label>
+        <label className="field">
+          <span className="field-label">Time zone</span>
+          <SearchSelect value={calendar.timeZone || ''} onChange={(timeZone) => onUpdate({ timeZone })} options={zoneOptions} />
+        </label>
+        <div className="field">
+          <span className="field-label">Color</span>
+          <ColorPicker value={calendar.color} onChange={(color) => onUpdate({ color })} label="Calendar color" />
+        </div>
+      </section>
 
-      <h3>Remove calendar</h3>
-      {calendar.primary ? (
-        <p className="settings-note">
-          This is your primary calendar. New events go here unless you pick another calendar. It cannot be deleted.
-        </p>
-      ) : (
-        <>
-          <p className="settings-note">Deleting this calendar also deletes all of its events. This cannot be undone.</p>
-          <button type="button" className="outline-btn danger" onClick={() => setConfirm(true)}>
-            Delete
-          </button>
-        </>
-      )}
+      <section id="remove-calendar">
+        <h2>Remove calendar</h2>
+        {calendar.primary ? (
+          <p className="settings-note">
+            This is your primary calendar. New events go here unless you pick another calendar. It cannot be deleted.
+          </p>
+        ) : (
+          <>
+            <p className="settings-note">Deleting this calendar also deletes all of its events. This cannot be undone.</p>
+            <button type="button" className="outline-btn danger" onClick={() => setConfirm(true)}>
+              Delete
+            </button>
+          </>
+        )}
+      </section>
 
       {confirmExit.shown && (
         <ConfirmDialog

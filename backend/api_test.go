@@ -145,6 +145,18 @@ func TestSettings(t *testing.T) {
 		t.Fatalf("after animations put: %+v", s)
 	}
 
+	if !s.KeyboardShortcuts {
+		t.Fatalf("keyboard shortcuts should be on by default: %+v", s)
+	}
+	code, body = do(t, srv, "PUT", "/api/settings", `{"keyboardShortcuts":false}`)
+	if code != http.StatusOK {
+		t.Fatalf("put keyboardShortcuts: %d %s", code, body)
+	}
+	_ = json.Unmarshal([]byte(body), &s)
+	if s.KeyboardShortcuts || s.Animations {
+		t.Fatalf("after keyboardShortcuts put: %+v", s)
+	}
+
 	for _, b := range []string{`{"timeZone":"Mars/Base"}`, `{"defaultDuration":7}`, `{"theme":"blue"}`,
 		`{"notifications":"loud"}`, `{"snoozeBefore":2}`, `{"defaultReminder":7}`} {
 		if code, _ := do(t, srv, "PUT", "/api/settings", b); code != http.StatusBadRequest {
@@ -262,16 +274,16 @@ func TestCalendars(t *testing.T) {
 	}
 	primary := cals[0]
 
-	code, body := do(t, srv, "POST", "/api/calendars", `{"name":"  Work ","color":"#0b8043"}`)
+	code, body := do(t, srv, "POST", "/api/calendars", `{"name":"  Work ","color":"#0b8043","timeZone":"Asia/Tokyo"}`)
 	if code != http.StatusCreated {
 		t.Fatalf("create calendar: %d %s", code, body)
 	}
 	var work Calendar
 	_ = json.Unmarshal([]byte(body), &work)
-	if work.Name != "Work" || work.Primary || work.Hidden || work.Color != "#0b8043" {
+	if work.Name != "Work" || work.Primary || work.Hidden || work.Color != "#0b8043" || work.TimeZone != "Asia/Tokyo" {
 		t.Fatalf("created calendar: %+v", work)
 	}
-	for _, b := range []string{`{"name":" "}`, `{"name":"x","color":"green"}`, `{"name":"x","primary":true}`} {
+	for _, b := range []string{`{"name":" "}`, `{"name":"x","color":"green"}`, `{"name":"x","primary":true}`, `{"name":"x","timeZone":"Mars/Base"}`, `{"name":"x","timeZone":"Local"}`} {
 		if code, body := do(t, srv, "POST", "/api/calendars", b); code != http.StatusBadRequest {
 			t.Errorf("expected 400 for %s, got %d %s", b, code, body)
 		}
@@ -280,8 +292,13 @@ func TestCalendars(t *testing.T) {
 	// Only the sent fields change.
 	code, body = do(t, srv, "PUT", "/api/calendars/"+itoa(work.ID), `{"hidden":true}`)
 	_ = json.Unmarshal([]byte(body), &work)
-	if code != http.StatusOK || !work.Hidden || work.Name != "Work" || work.Color != "#0b8043" {
+	if code != http.StatusOK || !work.Hidden || work.Name != "Work" || work.Color != "#0b8043" || work.TimeZone != "Asia/Tokyo" {
 		t.Fatalf("hide calendar: %d %s", code, body)
+	}
+	code, body = do(t, srv, "PUT", "/api/calendars/"+itoa(work.ID), `{"timeZone":""}`)
+	_ = json.Unmarshal([]byte(body), &work)
+	if code != http.StatusOK || work.TimeZone != "" {
+		t.Fatalf("clear time zone: %d %s", code, body)
 	}
 	if code, _ := do(t, srv, "PUT", "/api/calendars/999", `{"hidden":true}`); code != http.StatusNotFound {
 		t.Fatalf("update missing calendar: %d", code)

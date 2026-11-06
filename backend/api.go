@@ -214,7 +214,17 @@ type calendarInput struct {
 	Name        *string `json:"name"`
 	Description *string `json:"description"`
 	Color       *string `json:"color"`
+	TimeZone    *string `json:"timeZone"`
 	Hidden      *bool   `json:"hidden"`
+}
+
+// validTimeZone: empty (use the primary time zone) or a known IANA name.
+func validTimeZone(tz string) bool {
+	if tz == "" {
+		return true
+	}
+	_, err := time.LoadLocation(tz)
+	return err == nil && tz != "Local"
 }
 
 // apply copies the sent fields into c and checks them.
@@ -228,6 +238,9 @@ func (in calendarInput) apply(c *Calendar) error {
 	if in.Color != nil {
 		c.Color = *in.Color
 	}
+	if in.TimeZone != nil {
+		c.TimeZone = *in.TimeZone
+	}
 	if in.Hidden != nil {
 		c.Hidden = *in.Hidden
 	}
@@ -240,6 +253,8 @@ func (in calendarInput) apply(c *Calendar) error {
 		return errors.New("description is too long")
 	case !colorRe.MatchString(c.Color):
 		return errors.New("color must look like #1a2b3c")
+	case !validTimeZone(c.TimeZone):
+		return errors.New("invalid timeZone")
 	}
 	return nil
 }
@@ -351,6 +366,8 @@ type Settings struct {
 	DefaultReminder int `json:"defaultReminder"`
 	// Animations: play opening and closing animations (sidebar, cards, dialogs).
 	Animations bool `json:"animations"`
+	// KeyboardShortcuts: single-key shortcuts (D, W, C, ?...) are on.
+	KeyboardShortcuts bool `json:"keyboardShortcuts"`
 }
 
 var defaultSettings = Settings{
@@ -365,7 +382,8 @@ var defaultSettings = Settings{
 	NotificationSound: true,
 	DefaultReminder:   30,
 
-	Animations: true,
+	Animations:        true,
+	KeyboardShortcuts: true,
 }
 
 var (
@@ -429,6 +447,9 @@ func (a *API) loadSettings() (Settings, error) {
 	if v, ok := raw["animations"]; ok {
 		s.Animations = v == "true"
 	}
+	if v, ok := raw["keyboardShortcuts"]; ok {
+		s.KeyboardShortcuts = v == "true"
+	}
 	return s, nil
 }
 
@@ -455,7 +476,8 @@ func (a *API) putSettings(w http.ResponseWriter, r *http.Request) {
 		NotificationSound *bool   `json:"notificationSound"`
 		DefaultReminder   *int    `json:"defaultReminder"`
 
-		Animations *bool `json:"animations"`
+		Animations        *bool `json:"animations"`
+		KeyboardShortcuts *bool `json:"keyboardShortcuts"`
 	}
 	if !readJSON(w, r, &in) {
 		return
@@ -477,7 +499,7 @@ func (a *API) putSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	if in.TimeZone != nil {
 		if *in.TimeZone != "" {
-			if _, err := time.LoadLocation(*in.TimeZone); err != nil || *in.TimeZone == "Local" {
+			if !validTimeZone(*in.TimeZone) {
 				writeError(w, http.StatusBadRequest, "invalid timeZone")
 				return
 			}
@@ -524,6 +546,9 @@ func (a *API) putSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	if in.Animations != nil {
 		values["animations"] = strconv.FormatBool(*in.Animations)
+	}
+	if in.KeyboardShortcuts != nil {
+		values["keyboardShortcuts"] = strconv.FormatBool(*in.KeyboardShortcuts)
 	}
 	if err := a.store.SetSettings(values); err != nil {
 		serverError(w, err)

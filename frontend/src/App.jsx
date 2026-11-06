@@ -13,11 +13,12 @@ import ContextMenu from './components/ContextMenu.jsx';
 import CalendarMenu from './components/CalendarMenu.jsx';
 import SettingsPage from './components/SettingsPage.jsx';
 import AppearanceDialog from './components/AppearanceDialog.jsx';
+import ShortcutsDialog from './components/ShortcutsDialog.jsx';
 import Snackbar from './components/Snackbar.jsx';
 import NotificationAlert from './components/NotificationAlert.jsx';
 import { describeWhen } from './components/EventDetails.jsx';
 import { useNotifications } from './notifications.js';
-import { useMedia, NARROW, PHONE } from './useMedia.js';
+import { useMedia, NARROW, PHONE, TOUCH } from './useMedia.js';
 import { useExit } from './motion.js';
 
 const DEFAULT_SETTINGS = {
@@ -31,6 +32,7 @@ const DEFAULT_SETTINGS = {
   notificationSound: true,
   defaultReminder: 30,
   animations: true,
+  keyboardShortcuts: true,
 };
 
 const VIEWS = ['day', 'week', 'month', 'year'];
@@ -104,6 +106,9 @@ export default function App() {
   const [cursor, setCursor] = useState(() => T.startOfDay(T.toWall(Date.now(), T.browserTimeZone())));
   const narrow = useMedia(NARROW);
   const phone = useMedia(PHONE);
+  const touch = useMedia(TOUCH);
+  // Shortcut hints and the shortcuts dialog are hidden on phones and touch devices.
+  const showShortcuts = !phone && !touch;
   // On wide screens the sidebar choice is remembered. On phones the sidebar
   // floats over the calendar, so it always starts closed.
   const [wideSidebar, setWideSidebar] = useLocalState('openday.sidebarOpen', true);
@@ -130,6 +135,7 @@ export default function App() {
   const [menu, setMenu] = useState(null); // { id, x, y }
   const [calMenu, setCalMenu] = useState(null); // { id, x, y }: options of a calendar
   const [appearanceOpen, setAppearanceOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [snack, setSnack] = useState(null);
 
   const formOpen = draft !== null;
@@ -369,6 +375,7 @@ export default function App() {
   // `focus`: id of the settings section to scroll to, e.g. "calendar-3".
   const openSettings = (focus = null) => {
     setDraft(null);
+    setShortcutsOpen(false);
     closePopups();
     setPhoneSidebar(false);
     setSettingsFocus(focus);
@@ -478,14 +485,21 @@ export default function App() {
     if (e.key === 'Escape') {
       if (menu || details || calMenu) closePopups();
       else if (appearanceOpen) setAppearanceOpen(false);
+      else if (shortcutsOpen) setShortcutsOpen(false);
       else if (draft) setDraft(null);
       return;
     }
+    // Everything below can be turned off in Settings → Keyboard shortcuts.
+    if (!settings.keyboardShortcuts) return;
     const tag = e.target.tagName;
     if (e.ctrlKey || e.metaKey || e.altKey || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-    if (page !== 'calendar' || draft || appearanceOpen) return;
+    if (e.target.isContentEditable) return;
+    if (page !== 'calendar' || draft || appearanceOpen || shortcutsOpen) return;
     const k = e.key.toLowerCase();
-    if (k === 'd') setView('day');
+    if (k === '?') {
+      closePopups();
+      setShortcutsOpen(true);
+    } else if (k === 'd') setView('day');
     else if (k === 'w') setView('week');
     else if (k === 'm') setView('month');
     else if (k === 'y') setView('year');
@@ -508,6 +522,7 @@ export default function App() {
   const detailsEvent = details && events.find((e) => e.id === details.id);
   const detailsExit = useExit(detailsEvent ? { event: detailsEvent, anchor: details.anchor } : null);
   const appearanceExit = useExit(appearanceOpen);
+  const shortcutsExit = useExit(shortcutsOpen);
   const menuEvent = menu && events.find((e) => e.id === menu.id);
   const menuExit = useExit(menuEvent ? { event: menuEvent, x: menu.x, y: menu.y } : null);
   const calMenuCalendar = calMenu && calById[calMenu.id];
@@ -532,6 +547,11 @@ export default function App() {
           onCreateCalendar={createCalendar}
           onUpdateCalendar={updateCalendar}
           onDeleteCalendar={deleteCalendar}
+          showShortcuts={showShortcuts}
+          onViewShortcuts={() => {
+            setPage('calendar');
+            setShortcutsOpen(true);
+          }}
         />
         {snackBar}
         {alertBox}
@@ -621,6 +641,8 @@ export default function App() {
         onView={setView}
         onOpenSettings={() => openSettings()}
         onOpenAppearance={() => setAppearanceOpen(true)}
+        onOpenShortcuts={showShortcuts ? () => setShortcutsOpen(true) : null}
+        shortcuts={showShortcuts && settings.keyboardShortcuts}
       />
       <div className="app-body">
         {/* Docked form takes the sidebar's place on the left, like the classic calendar. */}
@@ -655,6 +677,7 @@ export default function App() {
                   setCalMenu({ id: c.id, x, y });
                 },
               }}
+              shortcuts={showShortcuts && settings.keyboardShortcuts}
               onPick={(d) => {
                 setCursor(d);
                 if (narrow) setPhoneSidebar(false);
@@ -727,6 +750,15 @@ export default function App() {
           closing={appearanceExit.phase === 'exit'}
           onChange={(theme) => updateSettings({ theme })}
           onClose={() => setAppearanceOpen(false)}
+        />
+      )}
+      {shortcutsExit.shown && (
+        <ShortcutsDialog
+          key={`shortcuts-${shortcutsExit.key}`}
+          enabled={settings.keyboardShortcuts}
+          closing={shortcutsExit.phase === 'exit'}
+          onEnable={() => updateSettings({ keyboardShortcuts: true })}
+          onClose={() => setShortcutsOpen(false)}
         />
       )}
       {snackBar}

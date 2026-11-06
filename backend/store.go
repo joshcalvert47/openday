@@ -31,6 +31,9 @@ type Calendar struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	Color       string `json:"color"`
+	// TimeZone is an IANA name like "Europe/Berlin", or empty for "same as
+	// the primary time zone" (the timeZone setting).
+	TimeZone string `json:"timeZone"`
 	// Hidden calendars stay in the list, but their events are not shown.
 	Hidden  bool `json:"hidden"`
 	Primary bool `json:"primary"`
@@ -70,6 +73,7 @@ CREATE TABLE IF NOT EXISTS calendars (
 	name        TEXT    NOT NULL,
 	description TEXT    NOT NULL DEFAULT '',
 	color       TEXT    NOT NULL,
+	time_zone   TEXT    NOT NULL DEFAULT '',
 	hidden      INTEGER NOT NULL DEFAULT 0,
 	is_primary  INTEGER NOT NULL DEFAULT 0,
 	created_at  INTEGER NOT NULL,
@@ -120,6 +124,17 @@ func migrate(db *sql.DB) error {
 		return err
 	}
 	defer tx.Rollback()
+
+	// Calendar tables made before calendars had a time zone.
+	has, err = hasColumn(tx, "calendars", "time_zone")
+	if err != nil {
+		return err
+	}
+	if !has {
+		if _, err := tx.Exec(`ALTER TABLE calendars ADD COLUMN time_zone TEXT NOT NULL DEFAULT ''`); err != nil {
+			return err
+		}
+	}
 
 	primary, err := ensurePrimaryCalendar(tx)
 	if err != nil {
@@ -312,11 +327,11 @@ func (s *Store) DeleteEvent(id int64) error {
 
 // ---- Calendars ----
 
-const calendarColumns = `id, name, description, color, hidden, is_primary`
+const calendarColumns = `id, name, description, color, time_zone, hidden, is_primary`
 
 func scanCalendar(row interface{ Scan(...any) error }) (Calendar, error) {
 	var c Calendar
-	err := row.Scan(&c.ID, &c.Name, &c.Description, &c.Color, &c.Hidden, &c.Primary)
+	err := row.Scan(&c.ID, &c.Name, &c.Description, &c.Color, &c.TimeZone, &c.Hidden, &c.Primary)
 	return c, err
 }
 
@@ -362,9 +377,9 @@ func (s *Store) CountCalendars() (int, error) {
 func (s *Store) CreateCalendar(c Calendar) (Calendar, error) {
 	now := nowMs()
 	res, err := s.db.Exec(`
-		INSERT INTO calendars (name, description, color, hidden, is_primary, created_at, updated_at)
-		VALUES (?, ?, ?, ?, 0, ?, ?)`,
-		c.Name, c.Description, c.Color, c.Hidden, now, now)
+		INSERT INTO calendars (name, description, color, time_zone, hidden, is_primary, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, 0, ?, ?)`,
+		c.Name, c.Description, c.Color, c.TimeZone, c.Hidden, now, now)
 	if err != nil {
 		return c, err
 	}
@@ -375,12 +390,12 @@ func (s *Store) CreateCalendar(c Calendar) (Calendar, error) {
 	return s.GetCalendar(id)
 }
 
-// UpdateCalendar saves name, description, color and hidden. Primary is not changed.
+// UpdateCalendar saves name, description, color, time zone and hidden. Primary is not changed.
 func (s *Store) UpdateCalendar(c Calendar) (Calendar, error) {
 	res, err := s.db.Exec(`
-		UPDATE calendars SET name = ?, description = ?, color = ?, hidden = ?, updated_at = ?
+		UPDATE calendars SET name = ?, description = ?, color = ?, time_zone = ?, hidden = ?, updated_at = ?
 		WHERE id = ?`,
-		c.Name, c.Description, c.Color, c.Hidden, nowMs(), c.ID)
+		c.Name, c.Description, c.Color, c.TimeZone, c.Hidden, nowMs(), c.ID)
 	if err != nil {
 		return c, err
 	}
