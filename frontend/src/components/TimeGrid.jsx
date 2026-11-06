@@ -1,0 +1,305 @@
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import * as T from '../time.js';
+import { colorOf, DEFAULT_COLOR, textOn } from '../colors.js';
+
+// Day and week views: one column per day, 24 hour rows.
+
+const HOUR_PX = 48;
+const PX_PER_MIN = HOUR_PX / 60;
+const SNAP = 15; // minutes for drag and resize
+const CLICK_SNAP = 30; // minutes for a simple click
+
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
+// Place overlapping events in columns, like the classic calendar layout.
+// Events that start at about the same time sit side by side; an event that
+// starts later is drawn on top, partly covering the one before it.
+function layoutDay(segs) {
+  const sorted = [...segs].sort((a, b) => a.s - b.s || b.e - a.e);
+  const out = [];
+  let cluster = [];
+  let columns = [];
+  let clusterEnd = -1;
+
+  const flush = () => {
+    const n = columns.length;
+    for (const it of cluster) {
+      const free = (col) => columns[col].every((o) => o.ve <= it.s || o.s >= it.ve);
+      let span = 1;
+      while (it.col + span < n && free(it.col + span)) span++;
+      it.left = it.col / n;
+      it.width = span / n;
+      const next = it.col + span;
+      if (next < n) {
+        const neighbours = columns[next].filter((o) => o.s < it.ve && o.ve > it.s);
+        if (neighbours.every((o) => o.s >= it.s + 30)) {
+          it.width = Math.min(1 - it.left, (span / n) * 1.7);
+        }
+      }
+      out.push(it);
+    }
+    cluster = [];
+    columns = [];
+    clusterEnd = -1;
+  };
+
+  for (const seg of sorted) {
+    if (cluster.length && seg.s >= clusterEnd) flush();
+    let col = columns.findIndex((c) => c[c.length - 1].ve <= seg.s);
+    if (col === -1) {
+      col = columns.length;
+      columns.push([]);
+    }
+    columns[col].push(seg);
+    seg.col = col;
+    cluster.push(seg);
+    clusterEnd = Math.max(clusterEnd, seg.ve);
+  }
+  if (cluster.length) flush();
+  return out;
+}
+
+export default function TimeGrid({
+  days, events, settings, today, nowWall, tzLabel,
+  onSurfacePointerDown, onCreate, onEventClick, onEventContext, onEventTimeChange, onDayClick, onInteract,
+}) {
+  const scrollRef = useRef(null);
+  const colsRef = useRef(null);
+  const [drag, setDrag] = useState(null);
+  const dragRef = useRef(null);
+  const props = useRef(null);
+  props.current = { days, onCreate, onEventClick, onEventTimeChange, settings };
+
+  // Scroll to a useful hour on first show.
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const showsToday = days.includes(today);
+    const minute = showsToday ? T.minutesOfDay(nowWall) - 120 : 7 * 60;
+    el.scrollTop = Math.max(0, minute * PX_PER_MIN);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ---- Pointer helpers ----
+  const locate = (clientX, clientY) => {
+    const r = colsRef.current.getBoundingClientRect();
+    const n = props.current.days.length;
+    const dayIdx = clamp(Math.floor(((clientX - r.left) / r.width) * n), 0, n - 1);
+    const min = clamp((clientY - r.top) / PX_PER_MIN, 0, 24 * 60);
+    return { dayIdx, min, rect: r };
+  };
+
+  const roundTo = (ms, minutes) => Math.round(ms / (minutes * T.MINUTE)) * minutes * T.MINUTE;
+
+  const update = (d, e) => {
+    const moved = d.moved || Math.abs(e.clientX - d.x) > 4 || Math.abs(e.clientY - d.y) > 4;
+    const { dayIdx, min } = locate(e.clientX, e.clientY);
+    const day = props.current.days[dayIdx];
+    if (d.type === 'create') {
+      return { ...d, moved, curMin: Math.floor(min / SNAP) * SNAP };
+    }
+    if (d.type === 'move') {
+      const pointer = day + min * T.MINUTE;
+      const ws = roundTo(pointer - d.grab, SNAP);
+      return { ...d, moved, ws, we: ws + (d.ev.we - d.ev.ws) };
+    }
+    // resize: follow the pointer in the column where the drag started
+    const pointer = props.current.days[d.dayIdx] + min * T.MINUTE;
+    const we = Math.max(d.ev.ws + SNAP * T.MINUTE, roundTo(pointer, SNAP));
+    return { ...d, moved, we };
+  };
+
+  const finish = (d, e) => {
+    const p = props.current;
+    if (d.type === 'create') {
+      const day = p.days[d.dayIdx];
+      let ws;
+      let we;
+      if (!d.moved) {
+        ws = day + Math.floor(d.rawMin / CLICK_SNAP) * CLICK_SNAP * T.MINUTE;
+        we = ws + p.settings.defaultDuration * T.MINUTE;
+      } else {
+        ws = day + Math.min(d.startMin, d.curMin) * T.MINUTE;
+        we = day + (Math.max(d.startMin, d.curMin) + SNAP) * T.MINUTE;
+      }
+      const r = colsRef.current.getBoundingClientRect();
+      const colW = r.width / p.days.length;
+      const anchor = {
+        left: r.left + colW * d.dayIdx,
+        right: r.left + colW * (d.dayIdx + 1),
+        top: r.top + T.minutesOfDay(ws) * PX_PER_MIN,
+      };
+      p.onCreate(ws, we, anchor);
+    } else if (!d.moved) {
+      p.onEventClick(d.ev, { left: d.rect.left, right: d.rect.right, top: d.rect.top });
+    } else if (d.type === 'move') {
+      if (d.ws !== d.ev.ws) p.onEventTimeChange(d.ev, d.ws, d.we);
+    } else if (d.we !== d.ev.we) {
+      p.onEventTimeChange(d.ev, d.ev.ws, d.we);
+    }
+  };
+
+  const begin = (d) => {
+    dragRef.current = d;
+    setDrag(d);
+    const move = (e) => {
+      if (!dragRef.current) return;
+      dragRef.current = update(dragRef.current, e);
+      setDrag(dragRef.current);
+    };
+    const up = (e) => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+      const cur = dragRef.current;
+      dragRef.current = null;
+      setDrag(null);
+      if (cur && e.type === 'pointerup') finish(cur, e);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+  };
+
+  useEffect(() => () => {
+    dragRef.current = null;
+  }, []);
+
+  const onColsPointerDown = (e) => {
+    if (e.button !== 0 || e.target.closest('.ev')) return;
+    if (!onSurfacePointerDown()) return;
+    e.preventDefault();
+    const { dayIdx, min } = locate(e.clientX, e.clientY);
+    const startMin = Math.floor(min / SNAP) * SNAP;
+    begin({ type: 'create', dayIdx, rawMin: min, startMin, curMin: startMin, moved: false, x: e.clientX, y: e.clientY });
+  };
+
+  const onEventPointerDown = (e, ev, dayIdx) => {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    e.preventDefault();
+    if (!ev.isDraft) onInteract?.();
+    const rect = e.currentTarget.getBoundingClientRect();
+    const base = { ev, dayIdx, rect, moved: false, x: e.clientX, y: e.clientY, ws: ev.ws, we: ev.we };
+    if (e.target.closest('.ev-resize')) {
+      begin({ ...base, type: 'resize' });
+    } else {
+      const { min } = locate(e.clientX, e.clientY);
+      begin({ ...base, type: 'move', grab: days[dayIdx] + min * T.MINUTE - ev.ws });
+    }
+  };
+
+  // ---- Build the event blocks for each day ----
+  const shown = events.map((ev) =>
+    drag && drag.moved && drag.type !== 'create' && drag.ev.id === ev.id
+      ? { ...ev, ws: drag.ws, we: drag.we, dragging: true }
+      : ev,
+  );
+  if (drag && drag.type === 'create' && drag.moved) {
+    const day = days[drag.dayIdx];
+    shown.push({
+      id: 'preview',
+      title: '',
+      color: DEFAULT_COLOR,
+      isDraft: true,
+      ws: day + Math.min(drag.startMin, drag.curMin) * T.MINUTE,
+      we: day + (Math.max(drag.startMin, drag.curMin) + SNAP) * T.MINUTE,
+    });
+  }
+
+  const columns = days.map((day) => {
+    const end = T.addDays(day, 1);
+    const segs = [];
+    for (const ev of shown) {
+      if (ev.ws >= end || ev.we <= day) continue;
+      if (ev.ws === ev.we && ev.ws !== day) continue;
+      const s = (Math.max(ev.ws, day) - day) / T.MINUTE;
+      const e = (Math.min(ev.we, end) - day) / T.MINUTE;
+      segs.push({ ev, s, e, ve: Math.max(e, s + 20), endsHere: ev.we <= end });
+    }
+    return layoutDay(segs);
+  });
+
+  const nowMin = T.minutesOfDay(nowWall);
+  const tf = settings.timeFormat;
+
+  return (
+    <div className="tg">
+      <div className="tg-head">
+        <div className="tg-gutter-head">
+          <span className="tg-tz">{tzLabel}</span>
+        </div>
+        {days.map((d) => (
+          <div key={d} className={`tg-day-head ${d === today ? 'today' : ''} ${d < today ? 'past' : ''}`}>
+            <span className="tg-dow">{T.weekdayShort(d).toUpperCase()}</span>
+            <button className="tg-date" onClick={() => onDayClick(d)} aria-label={`Open ${T.weekdayName(d)}`}>
+              {T.ymd(d)[2]}
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <div className="tg-scroll" ref={scrollRef}>
+        <div className="tg-body" style={{ height: 24 * HOUR_PX }}>
+          <div className="tg-gutter">
+            {Array.from({ length: 23 }, (_, i) => (
+              <span key={i} className="tg-hour" style={{ top: (i + 1) * HOUR_PX }}>
+                {T.formatHourLabel(i + 1, tf)}
+              </span>
+            ))}
+          </div>
+          <div className="tg-cols" ref={colsRef} onPointerDown={onColsPointerDown} data-calendar-surface>
+            {days.map((day, dayIdx) => (
+              <div key={day} className="tg-col">
+                <div className="tg-col-events">
+                  {columns[dayIdx].map((seg) => {
+                    const { ev } = seg;
+                    const color = colorOf(ev);
+                    const heightMin = seg.e - seg.s;
+                    const short = heightMin < 45;
+                    const zIndex = (ev.isDraft || ev.dragging ? 100 : 1) + seg.col;
+                    return (
+                      <div
+                        key={`${ev.id}-${day}`}
+                        className={`ev ${short ? 'ev-short' : ''} ${ev.isDraft ? 'ev-draft' : ''} ${
+                          ev.dragging ? 'ev-dragging' : ''
+                        } ${ev.we <= nowWall && !ev.isDraft ? 'ev-past' : ''}`}
+                        style={{
+                          top: seg.s * PX_PER_MIN,
+                          height: Math.max(heightMin * PX_PER_MIN - 1, 14),
+                          left: `${seg.left * 100}%`,
+                          width: `calc(${seg.width * 100}% - 1px)`,
+                          background: color,
+                          color: textOn(color),
+                          zIndex,
+                        }}
+                        onPointerDown={(e) => onEventPointerDown(e, ev, dayIdx)}
+                        onContextMenu={(e) => {
+                          e.preventDefault();
+                          onEventContext(ev, e.clientX, e.clientY);
+                        }}
+                        title={`${ev.title || '(No title)'}\n${T.formatTimeRange(ev.ws, ev.we, tf)}`}
+                      >
+                        <div className="ev-title">
+                          {ev.title || '(No title)'}
+                          {short && <span className="ev-time-inline">, {T.formatTime(ev.ws, tf)}</span>}
+                        </div>
+                        {!short && <div className="ev-time">{T.formatTimeRange(ev.ws, ev.we, tf)}</div>}
+                        {seg.endsHere && ev.id !== 'preview' && <div className="ev-resize" />}
+                      </div>
+                    );
+                  })}
+                </div>
+                {day === today && (
+                  <div className="tg-now" style={{ top: nowMin * PX_PER_MIN }}>
+                    <span className="tg-now-dot" />
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

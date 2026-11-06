@@ -1,0 +1,323 @@
+package main
+
+import (
+	"encoding/json"
+	"errors"
+	"log"
+	"net/http"
+	"regexp"
+	"strconv"
+	"strings"
+	"time"
+	"unicode/utf8"
+)
+
+// API holds the HTTP handlers for /api.
+type API struct {
+	store *Store
+}
+
+func NewAPI(store *Store) *API { return &API{store: store} }
+
+func (a *API) Register(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/health", a.health)
+	mux.HandleFunc("GET /api/events", a.listEvents)
+	mux.HandleFunc("POST /api/events", a.createEvent)
+	mux.HandleFunc("PUT /api/events/{id}", a.updateEvent)
+	mux.HandleFunc("DELETE /api/events/{id}", a.deleteEvent)
+	mux.HandleFunc("GET /api/settings", a.getSettings)
+	mux.HandleFunc("PUT /api/settings", a.putSettings)
+	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
+		writeError(w, http.StatusNotFound, "not found")
+	})
+}
+
+func (a *API) health(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+// ---- Events ----
+
+const (
+	maxTitleLen       = 1000
+	maxDescriptionLen = 20000
+	maxEventLength    = 366 * 24 * time.Hour
+	maxBodyBytes      = 1 << 20
+)
+
+var colorRe = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
+
+type eventInput struct {
+	Title       string    `json:"title"`
+	Description string    `json:"description"`
+	Color       string    `json:"color"`
+	Start       time.Time `json:"start"`
+	End         time.Time `json:"end"`
+}
+
+func (in eventInput) validate() (Event, error) {
+	e := Event{
+		Title:       strings.TrimSpace(in.Title),
+		Description: in.Description,
+		Color:       in.Color,
+		Start:       in.Start.UTC(),
+		End:         in.End.UTC(),
+	}
+	switch {
+	case in.Start.IsZero() || in.End.IsZero():
+		return e, errors.New("start and end are required")
+	case !e.End.After(e.Start):
+		return e, errors.New("end must be after start")
+	case e.End.Sub(e.Start) > maxEventLength:
+		return e, errors.New("event is too long")
+	case utf8.RuneCountInString(e.Title) > maxTitleLen:
+		return e, errors.New("title is too long")
+	case utf8.RuneCountInString(e.Description) > maxDescriptionLen:
+		return e, errors.New("description is too long")
+	case e.Color != "" && !colorRe.MatchString(e.Color):
+		return e, errors.New("color must look like #1a2b3c")
+	}
+	return e, nil
+}
+
+func (a *API) listEvents(w http.ResponseWriter, r *http.Request) {
+	from, err1 := time.Parse(time.RFC3339, r.URL.Query().Get("start"))
+	to, err2 := time.Parse(time.RFC3339, r.URL.Query().Get("end"))
+	if err1 != nil || err2 != nil {
+		writeError(w, http.StatusBadRequest, "start and end query parameters must be RFC 3339 times")
+		return
+	}
+	events, err := a.store.ListEvents(from, to)
+	if err != nil {
+		serverError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, events)
+}
+
+func (a *API) createEvent(w http.ResponseWriter, r *http.Request) {
+	var in eventInput
+	if !readJSON(w, r, &in) {
+		return
+	}
+	e, err := in.validate()
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	created, err := a.store.CreateEvent(e)
+	if err != nil {
+		serverError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, created)
+}
+
+func (a *API) updateEvent(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	var in eventInput
+	if !readJSON(w, r, &in) {
+		return
+	}
+	e, err := in.validate()
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	e.ID = id
+	updated, err := a.store.UpdateEvent(e)
+	if errors.Is(err, ErrNotFound) {
+		writeError(w, http.StatusNotFound, "event not found")
+		return
+	}
+	if err != nil {
+		serverError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, updated)
+}
+
+func (a *API) deleteEvent(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	err := a.store.DeleteEvent(id)
+	if errors.Is(err, ErrNotFound) {
+		writeError(w, http.StatusNotFound, "event not found")
+		return
+	}
+	if err != nil {
+		serverError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// ---- Settings ----
+
+// Settings are the user preferences. An empty TimeZone means "use the browser's time zone".
+type Settings struct {
+	DateFormat      string `json:"dateFormat"`      // "MDY", "DMY" or "YMD"
+	TimeFormat      string `json:"timeFormat"`      // "12h" or "24h"
+	TimeZone        string `json:"timeZone"`        // IANA name, e.g. "Europe/Berlin"
+	DefaultDuration int    `json:"defaultDuration"` // minutes
+	Theme           string `json:"theme"`           // "system", "light" or "dark"
+}
+
+var defaultSettings = Settings{
+	DateFormat:      "MDY",
+	TimeFormat:      "12h",
+	TimeZone:        "",
+	DefaultDuration: 60,
+	Theme:           "system",
+}
+
+var (
+	allowedDateFormats = []string{"MDY", "DMY", "YMD"}
+	allowedTimeFormats = []string{"12h", "24h"}
+	allowedThemes      = []string{"system", "light", "dark"}
+	allowedDurations   = []int{15, 20, 30, 45, 60, 90, 120}
+)
+
+func contains[T comparable](list []T, v T) bool {
+	for _, x := range list {
+		if x == v {
+			return true
+		}
+	}
+	return false
+}
+
+func (a *API) loadSettings() (Settings, error) {
+	s := defaultSettings
+	raw, err := a.store.GetSettings()
+	if err != nil {
+		return s, err
+	}
+	if v, ok := raw["dateFormat"]; ok && contains(allowedDateFormats, v) {
+		s.DateFormat = v
+	}
+	if v, ok := raw["timeFormat"]; ok && contains(allowedTimeFormats, v) {
+		s.TimeFormat = v
+	}
+	if v, ok := raw["timeZone"]; ok {
+		s.TimeZone = v
+	}
+	if v, ok := raw["defaultDuration"]; ok {
+		if n, err := strconv.Atoi(v); err == nil && contains(allowedDurations, n) {
+			s.DefaultDuration = n
+		}
+	}
+	if v, ok := raw["theme"]; ok && contains(allowedThemes, v) {
+		s.Theme = v
+	}
+	return s, nil
+}
+
+func (a *API) getSettings(w http.ResponseWriter, r *http.Request) {
+	s, err := a.loadSettings()
+	if err != nil {
+		serverError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, s)
+}
+
+// putSettings accepts a partial settings object and returns the full, saved settings.
+func (a *API) putSettings(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		DateFormat      *string `json:"dateFormat"`
+		TimeFormat      *string `json:"timeFormat"`
+		TimeZone        *string `json:"timeZone"`
+		DefaultDuration *int    `json:"defaultDuration"`
+		Theme           *string `json:"theme"`
+	}
+	if !readJSON(w, r, &in) {
+		return
+	}
+	values := map[string]string{}
+	if in.DateFormat != nil {
+		if !contains(allowedDateFormats, *in.DateFormat) {
+			writeError(w, http.StatusBadRequest, "invalid dateFormat")
+			return
+		}
+		values["dateFormat"] = *in.DateFormat
+	}
+	if in.TimeFormat != nil {
+		if !contains(allowedTimeFormats, *in.TimeFormat) {
+			writeError(w, http.StatusBadRequest, "invalid timeFormat")
+			return
+		}
+		values["timeFormat"] = *in.TimeFormat
+	}
+	if in.TimeZone != nil {
+		if *in.TimeZone != "" {
+			if _, err := time.LoadLocation(*in.TimeZone); err != nil || *in.TimeZone == "Local" {
+				writeError(w, http.StatusBadRequest, "invalid timeZone")
+				return
+			}
+		}
+		values["timeZone"] = *in.TimeZone
+	}
+	if in.DefaultDuration != nil {
+		if !contains(allowedDurations, *in.DefaultDuration) {
+			writeError(w, http.StatusBadRequest, "invalid defaultDuration")
+			return
+		}
+		values["defaultDuration"] = strconv.Itoa(*in.DefaultDuration)
+	}
+	if in.Theme != nil {
+		if !contains(allowedThemes, *in.Theme) {
+			writeError(w, http.StatusBadRequest, "invalid theme")
+			return
+		}
+		values["theme"] = *in.Theme
+	}
+	if err := a.store.SetSettings(values); err != nil {
+		serverError(w, err)
+		return
+	}
+	a.getSettings(w, r)
+}
+
+// ---- Helpers ----
+
+func pathID(w http.ResponseWriter, r *http.Request) (int64, bool) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || id <= 0 {
+		writeError(w, http.StatusBadRequest, "invalid id")
+		return 0, false
+	}
+	return id, true
+}
+
+func readJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
+	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(dst); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return false
+	}
+	return true
+}
+
+func writeJSON(w http.ResponseWriter, status int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(v)
+}
+
+func writeError(w http.ResponseWriter, status int, msg string) {
+	writeJSON(w, status, map[string]string{"error": msg})
+}
+
+func serverError(w http.ResponseWriter, err error) {
+	log.Printf("internal error: %v", err)
+	writeError(w, http.StatusInternalServerError, "internal server error")
+}

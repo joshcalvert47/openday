@@ -1,0 +1,15 @@
+# Frontend
+node_modules/
+frontend/dist/
+
+# Frontend build copied into the Go binary (only .gitkeep is kept in git)
+backend/web/dist/*
+!backend/web/dist/.gitkeep
+
+# Go build output
+backend/openday
+
+# Local database files
+*.db
+*.db-shm
+*.db-wal
