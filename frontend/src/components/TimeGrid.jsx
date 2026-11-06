@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import * as T from '../time.js';
-import { colorOf, DEFAULT_COLOR, textOn } from '../colors.js';
+import { colorOf, textOn } from '../colors.js';
 import { PHONE } from '../useMedia.js';
 import { motionOn } from '../motion.js';
 
@@ -64,7 +64,7 @@ function layoutDay(segs) {
 }
 
 export default function TimeGrid({
-  days, events, settings, today, nowWall, tzLabel,
+  days, events, settings, today, nowWall, tzLabel, newEventColor,
   onSurfacePointerDown, onCreate, onEventClick, onEventContext, onEventTimeChange, onDayClick, onInteract,
 }) {
   const scrollRef = useRef(null);
@@ -265,7 +265,7 @@ export default function TimeGrid({
     shown.push({
       id: 'preview',
       title: '',
-      color: DEFAULT_COLOR,
+      color: newEventColor,
       isDraft: true,
       ws: day + Math.min(drag.startMin, drag.curMin) * T.MINUTE,
       we: day + (Math.max(drag.startMin, drag.curMin) + SNAP) * T.MINUTE,

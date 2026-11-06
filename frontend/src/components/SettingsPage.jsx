@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Icon from '../icons.jsx';
 import Select from './Select.jsx';
 import SearchSelect from './SearchSelect.jsx';
 import { ThemeOptions } from './AppearanceDialog.jsx';
+import { CreateCalendar, CalendarSettings } from './CalendarSettings.jsx';
 import * as T from '../time.js';
 import { deviceReducesMotion } from '../motion.js';
 import { REMINDER_PRESETS, notificationPermission, requestNotificationPermission, playChime } from '../notifications.js';
@@ -48,7 +49,10 @@ function Field({ label, children }) {
   );
 }
 
-export default function SettingsPage({ settings, onChange, onBack }) {
+// `focus`: id of a section to scroll to when the page opens ("create-calendar", "calendar-3").
+export default function SettingsPage({
+  settings, onChange, onBack, focus, calendars, onCreateCalendar, onUpdateCalendar, onDeleteCalendar,
+}) {
   const zoneOptions = useMemo(
     () => [
       { value: '', label: `Device time zone (${T.browserTimeZone()})` },
@@ -59,6 +63,19 @@ export default function SettingsPage({ settings, onChange, onBack }) {
   const sample = T.makeDay(2026, 11, 31) + 13 * T.HOUR;
   const [permission, setPermission] = useState(notificationPermission);
   const askPermission = async () => setPermission(await requestNotificationPermission());
+
+  // Scroll to a section: when the page opens, and to a calendar just created.
+  const [scrollTo, setScrollTo] = useState(focus);
+  useEffect(() => {
+    if (!scrollTo) return;
+    document.getElementById(scrollTo)?.scrollIntoView({ block: 'start' });
+    setScrollTo(null);
+  }, [scrollTo]);
+  const createCalendar = async (fields) => {
+    const created = await onCreateCalendar(fields);
+    if (created) setScrollTo(`calendar-${created.id}`);
+    return created;
+  };
 
   return (
     <div className="settings">
@@ -75,6 +92,15 @@ export default function SettingsPage({ settings, onChange, onBack }) {
           <a href="#general" className="settings-nav-item">General</a>
           <a href="#notifications" className="settings-nav-item">Notification settings</a>
           <a href="#appearance" className="settings-nav-item">Appearance</a>
+          <div className="settings-nav-head">Add calendar</div>
+          <a href="#create-calendar" className="settings-nav-item">Create new calendar</a>
+          <div className="settings-nav-head">Settings for my calendars</div>
+          {calendars.map((c) => (
+            <a key={c.id} href={`#calendar-${c.id}`} className="settings-nav-item cal-nav-item" title={c.name}>
+              <span className="cal-dot" style={{ background: c.color }} />
+              <span className="cal-name">{c.name}</span>
+            </a>
+          ))}
         </nav>
         <div className="settings-content">
           <section id="general">
@@ -178,6 +204,25 @@ export default function SettingsPage({ settings, onChange, onBack }) {
               <p className="settings-note">Your device is set to reduce motion, so animations are not shown.</p>
             )}
           </section>
+
+          <section id="create-calendar">
+            <h2>Create new calendar</h2>
+            <CreateCalendar calendars={calendars} autoFocus={focus === 'create-calendar'} onCreate={createCalendar} />
+          </section>
+
+          {calendars.map((c) => (
+            <section key={c.id} id={`calendar-${c.id}`}>
+              <h2 className="cal-heading">
+                <span className="cal-dot" style={{ background: c.color }} />
+                <span className="cal-name">{c.name}</span>
+              </h2>
+              <CalendarSettings
+                calendar={c}
+                onUpdate={(patch) => onUpdateCalendar(c.id, patch)}
+                onDelete={() => onDeleteCalendar(c.id)}
+              />
+            </section>
+          ))}
         </div>
       </div>
     </div>

@@ -13,7 +13,7 @@ When making product or UI decisions, the default answer is: **do what Google Cal
 
 ## Project status
 
-First working version: day/week/month/year views, events (create, edit, move, resize, color, delete), notifications, settings, light/dark theme.
+First working version: day/week/month/year views, events (create, edit, move, resize, color, delete), several calendars, notifications, settings, light/dark theme.
 
 Commands:
 
@@ -54,7 +54,18 @@ Smaller decisions (made in the first version; change them only after asking the 
 
 How the app works:
 
-- API lives under `/api` (`backend/api.go`): `GET/POST /api/events`, `PUT/DELETE /api/events/{id}`, `GET/PUT /api/settings`, `GET /api/health`.
+- API lives under `/api` (`backend/api.go`): `GET/POST /api/events`, `PUT/DELETE /api/events/{id}`, `GET/POST /api/calendars`, `PUT/DELETE /api/calendars/{id}`, `GET/PUT /api/settings`, `GET /api/health`.
+- Calendars (like "My calendars" in the classic calendar):
+  - Table `calendars`: name, description, color, `hidden`, `is_primary`. Every event has a `calendar_id`.
+  - There is always one primary calendar ("My calendar", made by `migrate` in `store.go`). It is listed first and cannot be deleted. New events go to it. An event sent without `calendarId` also goes to it.
+  - `migrate` puts events from older databases in the primary calendar. Their color `#039be5` (the old default) becomes `''`.
+  - Event color `''` means "use the calendar color" (`colorOf(event, calendar)` in `colors.js`). New events use it. The color picker shows it as the first swatch.
+  - `PUT /api/calendars/{id}` changes only the fields that are sent (e.g. `{"hidden":true}`).
+  - Deleting a calendar deletes its events (after a confirm dialog).
+  - Sidebar: a colored checkbox shows or hides a calendar (`hidden` is saved in the database, so it follows the user). The ⋮ button (or right-click) opens "Display this only", "Settings" and colors (`CalendarMenu.jsx`). The + button opens Settings at "Create new calendar".
+  - Settings page: "Create new calendar" and one section per calendar (name, description, color, delete). Fields save when they lose focus.
+  - Saving an event into a hidden calendar shows that calendar again.
+  - Hidden calendars still send notifications (like the classic calendar).
 - Events are stored as UTC Unix milliseconds. The frontend shows them in the time zone from settings.
 - Settings (date format, time format, time zone, default duration, default notification, notification settings, theme, animations) are stored in the database, so they follow the user across browsers.
 - Notifications (`frontend/src/notifications.js`):

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from './api.js';
 import * as T from './time.js';
-import { DEFAULT_COLOR } from './colors.js';
+import { colorOf } from './colors.js';
 import Header from './components/Header.jsx';
 import Sidebar from './components/Sidebar.jsx';
 import TimeGrid from './components/TimeGrid.jsx';
@@ -10,6 +10,7 @@ import YearView from './components/YearView.jsx';
 import EventEditor from './components/EventEditor.jsx';
 import EventDetails from './components/EventDetails.jsx';
 import ContextMenu from './components/ContextMenu.jsx';
+import CalendarMenu from './components/CalendarMenu.jsx';
 import SettingsPage from './components/SettingsPage.jsx';
 import AppearanceDialog from './components/AppearanceDialog.jsx';
 import Snackbar from './components/Snackbar.jsx';
@@ -33,6 +34,16 @@ const DEFAULT_SETTINGS = {
 };
 
 const VIEWS = ['day', 'week', 'month', 'year'];
+
+// Same order as the server: the primary calendar first, then by name.
+function sortCalendars(list) {
+  return [...list].sort(
+    (a, b) =>
+      Number(b.primary) - Number(a.primary) ||
+      a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }) ||
+      a.id - b.id,
+  );
+}
 
 // Small per-browser preferences (current view, sidebar open).
 function useLocalState(key, initial) {
@@ -107,12 +118,17 @@ export default function App() {
   // Phones have no docking: the form is a sheet stuck to the bottom.
   const docked = dockedChoice && !phone;
   const [page, setPage] = useState('calendar');
+  // Section to show when the settings page opens (e.g. "calendar-3").
+  const [settingsFocus, setSettingsFocus] = useState(null);
+  const [calendarListOpen, setCalendarListOpen] = useLocalState('openday.calendarListOpen', true);
 
+  const [calendars, setCalendars] = useState([]);
   const [events, setEvents] = useState([]);
   const [draft, setDraft] = useState(null); // event being created (no id) or edited
   const [editorAnchor, setEditorAnchor] = useState(null);
   const [details, setDetails] = useState(null); // { id, anchor }
   const [menu, setMenu] = useState(null); // { id, x, y }
+  const [calMenu, setCalMenu] = useState(null); // { id, x, y }: options of a calendar
   const [appearanceOpen, setAppearanceOpen] = useState(false);
   const [snack, setSnack] = useState(null);
 
@@ -145,9 +161,10 @@ export default function App() {
 
   const showError = useCallback((err) => setSnack({ text: err.message || String(err) }), []);
 
-  // ---- Load settings ----
+  // ---- Load settings and calendars ----
   useEffect(() => {
     api.getSettings().then((s) => setSettings({ ...DEFAULT_SETTINGS, ...s }), showError);
+    api.listCalendars().then((list) => setCalendars(sortCalendars(list)), showError);
   }, [showError]);
 
   const updateSettings = async (patch) => {
@@ -159,6 +176,61 @@ export default function App() {
       setSettings(before);
       showError(err);
     }
+  };
+
+  // ---- Calendars ----
+  const calById = useMemo(() => Object.fromEntries(calendars.map((c) => [c.id, c])), [calendars]);
+  const primaryCal = calendars.find((c) => c.primary) || calendars[0];
+
+  // Change some fields of a calendar (name, description, color, hidden).
+  const updateCalendar = async (id, patch) => {
+    const before = calById[id];
+    if (!before) return;
+    setCalendars((list) => sortCalendars(list.map((c) => (c.id === id ? { ...c, ...patch } : c))));
+    try {
+      const saved = await api.updateCalendar(id, patch);
+      setCalendars((list) => sortCalendars(list.map((c) => (c.id === id ? saved : c))));
+    } catch (err) {
+      setCalendars((list) => sortCalendars(list.map((c) => (c.id === id ? before : c))));
+      showError(err);
+    }
+  };
+
+  // Show only this calendar ("Display this only").
+  const showOnlyCalendar = (id) => {
+    for (const c of calendars) {
+      if (c.hidden !== (c.id !== id)) updateCalendar(c.id, { hidden: c.id !== id });
+    }
+  };
+
+  const createCalendar = async (fields) => {
+    try {
+      const created = await api.createCalendar(fields);
+      setCalendars((list) => sortCalendars([...list, created]));
+      setSnack({ text: 'Calendar created' });
+      return created;
+    } catch (err) {
+      showError(err);
+      return null;
+    }
+  };
+
+  // Deletes the calendar and all of its events (the server does the same).
+  const deleteCalendar = async (id) => {
+    try {
+      await api.deleteCalendar(id);
+    } catch (err) {
+      showError(err);
+      return false;
+    }
+    setCalendars((list) => list.filter((c) => c.id !== id));
+    setEvents((list) => list.filter((e) => e.calendarId !== id));
+    setDraft((d) => (d && d.calendarId === id ? null : d));
+    setDetails(null);
+    setMenu(null);
+    setCalMenu(null);
+    setSnack({ text: 'Calendar deleted' });
+    return true;
   };
 
   // When the time zone changes, keep showing the same calendar day.
@@ -199,6 +271,8 @@ export default function App() {
   }, [rangeKey, showError]);
 
   // Events with wall times, with the draft shown in place of the saved event.
+  // Events of hidden calendars are left out (but not the one being edited).
+  // `color` is the color to draw: the event's own, or its calendar's.
   const shownEvents = useMemo(() => {
     let list = events;
     if (draft) {
@@ -206,13 +280,18 @@ export default function App() {
         ? events.map((e) => (e.id === draft.id ? { ...draft } : e))
         : [...events, { ...draft, id: 'draft' }];
     }
-    return list.map((e) => ({
-      ...e,
-      isDraft: e.id === 'draft',
-      ws: T.toWall(e.start, tz),
-      we: T.toWall(e.end, tz),
-    }));
-  }, [events, draft, tz]);
+    return list
+      .filter((e) => !calById[e.calendarId]?.hidden || (draft && (e.id === 'draft' || e.id === draft.id)))
+      .map((e) => ({
+        ...e,
+        color: colorOf(e, calById[e.calendarId]),
+        isDraft: e.id === 'draft',
+        ws: T.toWall(e.start, tz),
+        we: T.toWall(e.end, tz),
+      }));
+  }, [events, draft, tz, calById]);
+  // Color of an event that is being drawn with the mouse (before the form opens).
+  const newEventColor = colorOf({}, (draft && !draft.id && calById[draft.calendarId]) || primaryCal);
 
   // ---- Navigation ----
   const go = (dir) => {
@@ -230,12 +309,13 @@ export default function App() {
   const closePopups = () => {
     setDetails(null);
     setMenu(null);
+    setCalMenu(null);
   };
 
   // Called when the user presses on an empty part of the calendar.
   // Returns true if that press should start creating an event.
   const onSurfacePointerDown = () => {
-    if (details || menu) {
+    if (details || menu || calMenu) {
       closePopups();
       return false;
     }
@@ -255,9 +335,10 @@ export default function App() {
       d && !d.id
         ? { ...d, start, end }
         : {
+            calendarId: primaryCal?.id || 0,
             title: '',
             description: '',
-            color: DEFAULT_COLOR,
+            color: '', // calendar color
             start,
             end,
             reminders: settings.defaultReminder >= 0 ? [settings.defaultReminder] : [],
@@ -285,10 +366,12 @@ export default function App() {
     if (Math.abs(dx) > 60 && Math.abs(dx) > 2 * Math.abs(dy) && Date.now() - s0.time < 700) go(dx < 0 ? 1 : -1);
   };
 
-  const openSettings = () => {
+  // `focus`: id of the settings section to scroll to, e.g. "calendar-3".
+  const openSettings = (focus = null) => {
     setDraft(null);
     closePopups();
     setPhoneSidebar(false);
+    setSettingsFocus(focus);
     setPage('settings');
   };
 
@@ -312,13 +395,10 @@ export default function App() {
     if (!d) return;
     setDraft(null);
     try {
-      if (d.id) {
-        const saved = await api.updateEvent(d);
-        setEvents((list) => list.map((e) => (e.id === saved.id ? saved : e)));
-      } else {
-        const saved = await api.createEvent(d);
-        setEvents((list) => [...list, saved]);
-      }
+      const saved = d.id ? await api.updateEvent(d) : await api.createEvent(d);
+      setEvents((list) => (d.id ? list.map((e) => (e.id === saved.id ? saved : e)) : [...list, saved]));
+      // Saved into a hidden calendar: show that calendar, so the event does not vanish.
+      if (calById[saved.calendarId]?.hidden) updateCalendar(saved.calendarId, { hidden: false });
       setSnack({ text: 'Event saved' });
     } catch (err) {
       setDraft(d);
@@ -396,7 +476,7 @@ export default function App() {
       return;
     }
     if (e.key === 'Escape') {
-      if (menu || details) closePopups();
+      if (menu || details || calMenu) closePopups();
       else if (appearanceOpen) setAppearanceOpen(false);
       else if (draft) setDraft(null);
       return;
@@ -430,6 +510,8 @@ export default function App() {
   const appearanceExit = useExit(appearanceOpen);
   const menuEvent = menu && events.find((e) => e.id === menu.id);
   const menuExit = useExit(menuEvent ? { event: menuEvent, x: menu.x, y: menu.y } : null);
+  const calMenuCalendar = calMenu && calById[calMenu.id];
+  const calMenuExit = useExit(calMenuCalendar ? { calendar: calMenuCalendar, x: calMenu.x, y: calMenu.y } : null);
   // The form is floating or docked. Moving it between the two plays the
   // closing animation of one and the opening animation of the other.
   const floatExit = useExit(!docked ? draft : null);
@@ -441,7 +523,16 @@ export default function App() {
   if (page === 'settings') {
     return (
       <>
-        <SettingsPage settings={settings} onChange={updateSettings} onBack={() => setPage('calendar')} />
+        <SettingsPage
+          settings={settings}
+          onChange={updateSettings}
+          onBack={() => setPage('calendar')}
+          focus={settingsFocus}
+          calendars={calendars}
+          onCreateCalendar={createCalendar}
+          onUpdateCalendar={updateCalendar}
+          onDeleteCalendar={deleteCalendar}
+        />
         {snackBar}
         {alertBox}
       </>
@@ -468,6 +559,7 @@ export default function App() {
         {...common}
         key={view}
         days={days}
+        newEventColor={newEventColor}
         tzLabel={gmtLabel(now, nowWall)}
         onCreate={startDraft}
         onEventTimeChange={onEventTimeChange}
@@ -498,6 +590,7 @@ export default function App() {
       <EventEditor
         key={`editor-${isDocked}-${key}`}
         draft={shown}
+        calendars={calendars}
         settings={settings}
         tz={tz}
         today={today}
@@ -526,7 +619,7 @@ export default function App() {
         onPrev={() => go(-1)}
         onNext={() => go(1)}
         onView={setView}
-        onOpenSettings={openSettings}
+        onOpenSettings={() => openSettings()}
         onOpenAppearance={() => setAppearanceOpen(true)}
       />
       <div className="app-body">
@@ -549,7 +642,19 @@ export default function App() {
               today={today}
               phase={sidebarExit.phase}
               onCreate={createFromButton}
-              onOpenSettings={openSettings}
+              onOpenSettings={() => openSettings()}
+              calendarList={{
+                calendars,
+                open: calendarListOpen,
+                onToggleOpen: () => setCalendarListOpen(!calendarListOpen),
+                onCreate: () => openSettings('create-calendar'),
+                onToggle: (c) => updateCalendar(c.id, { hidden: !c.hidden }),
+                onMenu: (c, x, y) => {
+                  setDetails(null);
+                  setMenu(null);
+                  setCalMenu({ id: c.id, x, y });
+                },
+              }}
               onPick={(d) => {
                 setCursor(d);
                 if (narrow) setPhoneSidebar(false);
@@ -567,6 +672,7 @@ export default function App() {
         <EventDetails
           key={`details-${detailsExit.key}`}
           event={detailsExit.shown.event}
+          calendar={calById[detailsExit.shown.event.calendarId]}
           tz={tz}
           settings={settings}
           anchor={detailsExit.shown.anchor}
@@ -580,6 +686,7 @@ export default function App() {
         <ContextMenu
           key={`menu-${menuExit.key}`}
           event={menuExit.shown.event}
+          calendar={calById[menuExit.shown.event.calendarId]}
           x={menuExit.shown.x}
           y={menuExit.shown.y}
           closing={menuExit.phase === 'exit'}
@@ -592,6 +699,25 @@ export default function App() {
             editEvent(menuExit.shown.event.id, { left: menuExit.shown.x, right: menuExit.shown.x, top: menuExit.shown.y })
           }
           onDelete={() => deleteEvent(menuExit.shown.event.id)}
+        />
+      )}
+      {calMenuExit.shown && (
+        <CalendarMenu
+          key={`calmenu-${calMenuExit.key}`}
+          calendar={calMenuExit.shown.calendar}
+          x={calMenuExit.shown.x}
+          y={calMenuExit.shown.y}
+          closing={calMenuExit.phase === 'exit'}
+          onClose={() => setCalMenu(null)}
+          onOnly={() => {
+            setCalMenu(null);
+            showOnlyCalendar(calMenuExit.shown.calendar.id);
+          }}
+          onSettings={() => openSettings(`calendar-${calMenuExit.shown.calendar.id}`)}
+          onColor={(color) => {
+            setCalMenu(null);
+            updateCalendar(calMenuExit.shown.calendar.id, { color });
+          }}
         />
       )}
       {appearanceExit.shown && (

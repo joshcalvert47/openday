@@ -3,7 +3,7 @@ import Icon from '../icons.jsx';
 import DropdownList from './DropdownList.jsx';
 
 // A styled drop-down, used instead of the browser's <select>.
-// options: [{ value, label }]
+// options: [{ value, label, color? }] (color: a dot before the label, e.g. calendars)
 // Keyboard: arrows, Home/End, Enter/Space, Escape, and typing letters jumps
 // to the first option that starts with them.
 export default function Select({ value, options, onChange, className = '', ...rest }) {
@@ -91,6 +91,7 @@ export default function Select({ value, options, onChange, className = '', ...re
         onBlur={() => setOpen(false)}
         {...rest}
       >
+        {current?.color && <span className="dd-dot" style={{ background: current.color }} />}
         <span className="select-value">{current?.label}</span>
         <Icon name="arrowDropDown" size={20} className="select-caret" />
       </button>

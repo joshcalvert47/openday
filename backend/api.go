@@ -26,6 +26,10 @@ func (a *API) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/events", a.createEvent)
 	mux.HandleFunc("PUT /api/events/{id}", a.updateEvent)
 	mux.HandleFunc("DELETE /api/events/{id}", a.deleteEvent)
+	mux.HandleFunc("GET /api/calendars", a.listCalendars)
+	mux.HandleFunc("POST /api/calendars", a.createCalendar)
+	mux.HandleFunc("PUT /api/calendars/{id}", a.updateCalendar)
+	mux.HandleFunc("DELETE /api/calendars/{id}", a.deleteCalendar)
 	mux.HandleFunc("GET /api/settings", a.getSettings)
 	mux.HandleFunc("PUT /api/settings", a.putSettings)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
@@ -51,6 +55,8 @@ const (
 var colorRe = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 
 type eventInput struct {
+	// CalendarID 0 (or missing) means the primary calendar.
+	CalendarID  int64     `json:"calendarId"`
 	Title       string    `json:"title"`
 	Description string    `json:"description"`
 	Color       string    `json:"color"`
@@ -61,6 +67,7 @@ type eventInput struct {
 
 func (in eventInput) validate() (Event, error) {
 	e := Event{
+		CalendarID:  in.CalendarID,
 		Title:       strings.TrimSpace(in.Title),
 		Description: in.Description,
 		Color:       in.Color,
@@ -96,6 +103,29 @@ func (in eventInput) validate() (Event, error) {
 	return e, nil
 }
 
+// validateEvent checks the input and its calendar. It writes the error response
+// and returns false when the event cannot be saved.
+func (a *API) validateEvent(w http.ResponseWriter, in eventInput) (Event, bool) {
+	e, err := in.validate()
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return e, false
+	}
+	if e.CalendarID == 0 {
+		if e.CalendarID, err = a.store.PrimaryCalendarID(); err != nil {
+			serverError(w, err)
+			return e, false
+		}
+	} else if _, err := a.store.GetCalendar(e.CalendarID); errors.Is(err, ErrNotFound) {
+		writeError(w, http.StatusBadRequest, "calendar not found")
+		return e, false
+	} else if err != nil {
+		serverError(w, err)
+		return e, false
+	}
+	return e, true
+}
+
 func (a *API) listEvents(w http.ResponseWriter, r *http.Request) {
 	from, err1 := time.Parse(time.RFC3339, r.URL.Query().Get("start"))
 	to, err2 := time.Parse(time.RFC3339, r.URL.Query().Get("end"))
@@ -116,9 +146,8 @@ func (a *API) createEvent(w http.ResponseWriter, r *http.Request) {
 	if !readJSON(w, r, &in) {
 		return
 	}
-	e, err := in.validate()
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+	e, ok := a.validateEvent(w, in)
+	if !ok {
 		return
 	}
 	created, err := a.store.CreateEvent(e)
@@ -138,9 +167,8 @@ func (a *API) updateEvent(w http.ResponseWriter, r *http.Request) {
 	if !readJSON(w, r, &in) {
 		return
 	}
-	e, err := in.validate()
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+	e, ok := a.validateEvent(w, in)
+	if !ok {
 		return
 	}
 	e.ID = id
@@ -171,6 +199,137 @@ func (a *API) deleteEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// ---- Calendars ----
+
+const (
+	maxCalendarNameLen = 200
+	maxCalendars       = 100
+)
+
+// calendarInput is used to create a calendar (name is required) and to
+// change one (only the fields that are sent are changed).
+type calendarInput struct {
+	Name        *string `json:"name"`
+	Description *string `json:"description"`
+	Color       *string `json:"color"`
+	Hidden      *bool   `json:"hidden"`
+}
+
+// apply copies the sent fields into c and checks them.
+func (in calendarInput) apply(c *Calendar) error {
+	if in.Name != nil {
+		c.Name = strings.TrimSpace(*in.Name)
+	}
+	if in.Description != nil {
+		c.Description = *in.Description
+	}
+	if in.Color != nil {
+		c.Color = *in.Color
+	}
+	if in.Hidden != nil {
+		c.Hidden = *in.Hidden
+	}
+	switch {
+	case c.Name == "":
+		return errors.New("calendar name is required")
+	case utf8.RuneCountInString(c.Name) > maxCalendarNameLen:
+		return errors.New("calendar name is too long")
+	case utf8.RuneCountInString(c.Description) > maxDescriptionLen:
+		return errors.New("description is too long")
+	case !colorRe.MatchString(c.Color):
+		return errors.New("color must look like #1a2b3c")
+	}
+	return nil
+}
+
+func (a *API) listCalendars(w http.ResponseWriter, r *http.Request) {
+	list, err := a.store.ListCalendars()
+	if err != nil {
+		serverError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, list)
+}
+
+func (a *API) createCalendar(w http.ResponseWriter, r *http.Request) {
+	var in calendarInput
+	if !readJSON(w, r, &in) {
+		return
+	}
+	c := Calendar{Color: primaryCalendarColor}
+	if err := in.apply(&c); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	n, err := a.store.CountCalendars()
+	if err != nil {
+		serverError(w, err)
+		return
+	}
+	if n >= maxCalendars {
+		writeError(w, http.StatusBadRequest, "too many calendars")
+		return
+	}
+	created, err := a.store.CreateCalendar(c)
+	if err != nil {
+		serverError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, created)
+}
+
+func (a *API) updateCalendar(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	var in calendarInput
+	if !readJSON(w, r, &in) {
+		return
+	}
+	c, err := a.store.GetCalendar(id)
+	if errors.Is(err, ErrNotFound) {
+		writeError(w, http.StatusNotFound, "calendar not found")
+		return
+	}
+	if err != nil {
+		serverError(w, err)
+		return
+	}
+	if err := in.apply(&c); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	updated, err := a.store.UpdateCalendar(c)
+	if errors.Is(err, ErrNotFound) {
+		writeError(w, http.StatusNotFound, "calendar not found")
+		return
+	}
+	if err != nil {
+		serverError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, updated)
+}
+
+func (a *API) deleteCalendar(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	err := a.store.DeleteCalendar(id)
+	switch {
+	case errors.Is(err, ErrNotFound):
+		writeError(w, http.StatusNotFound, "calendar not found")
+	case errors.Is(err, ErrPrimary):
+		writeError(w, http.StatusConflict, err.Error())
+	case err != nil:
+		serverError(w, err)
+	default:
+		w.WriteHeader(http.StatusNoContent)
+	}
 }
 
 // ---- Settings ----

@@ -12,17 +12,40 @@ import (
 
 // Event is a calendar event. Start and End are stored as Unix milliseconds (UTC).
 type Event struct {
-	ID          int64     `json:"id"`
-	Title       string    `json:"title"`
-	Description string    `json:"description"`
-	Color       string    `json:"color"`
-	Start       time.Time `json:"start"`
-	End         time.Time `json:"end"`
+	ID          int64  `json:"id"`
+	CalendarID  int64  `json:"calendarId"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	// Color is empty when the event uses the color of its calendar.
+	Color string    `json:"color"`
+	Start time.Time `json:"start"`
+	End   time.Time `json:"end"`
 	// Reminders are notification times in minutes before the start (sorted, no duplicates).
 	Reminders []int `json:"reminders"`
 }
 
-var ErrNotFound = errors.New("not found")
+// Calendar groups events, like "Work" or "Family". There is always one
+// primary calendar; it cannot be deleted.
+type Calendar struct {
+	ID          int64  `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Color       string `json:"color"`
+	// Hidden calendars stay in the list, but their events are not shown.
+	Hidden  bool `json:"hidden"`
+	Primary bool `json:"primary"`
+}
+
+var (
+	ErrNotFound = errors.New("not found")
+	ErrPrimary  = errors.New("the primary calendar cannot be deleted")
+)
+
+// Name and color of the calendar made for a new (or older) database.
+const (
+	primaryCalendarName  = "My calendar"
+	primaryCalendarColor = "#039be5"
+)
 
 // Store wraps the SQLite database.
 type Store struct {
@@ -41,6 +64,17 @@ CREATE TABLE IF NOT EXISTS events (
 	updated_at  INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS events_start_end ON events(start_ms, end_ms);
+
+CREATE TABLE IF NOT EXISTS calendars (
+	id          INTEGER PRIMARY KEY AUTOINCREMENT,
+	name        TEXT    NOT NULL,
+	description TEXT    NOT NULL DEFAULT '',
+	color       TEXT    NOT NULL,
+	hidden      INTEGER NOT NULL DEFAULT 0,
+	is_primary  INTEGER NOT NULL DEFAULT 0,
+	created_at  INTEGER NOT NULL,
+	updated_at  INTEGER NOT NULL
+);
 
 CREATE TABLE IF NOT EXISTS settings (
 	key   TEXT PRIMARY KEY,
@@ -68,17 +102,92 @@ func OpenStore(path string) (*Store, error) {
 	return &Store{db: db}, nil
 }
 
-// migrate adds columns that older databases do not have yet.
+// migrate adds columns that older databases do not have yet, and makes sure
+// there is a primary calendar.
 func migrate(db *sql.DB) error {
 	has, err := hasColumn(db, "events", "reminders")
-	if err != nil || has {
+	if err != nil {
 		return err
 	}
-	_, err = db.Exec(`ALTER TABLE events ADD COLUMN reminders TEXT NOT NULL DEFAULT '[]'`)
-	return err
+	if !has {
+		if _, err := db.Exec(`ALTER TABLE events ADD COLUMN reminders TEXT NOT NULL DEFAULT '[]'`); err != nil {
+			return err
+		}
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	primary, err := ensurePrimaryCalendar(tx)
+	if err != nil {
+		return err
+	}
+	has, err = hasColumn(tx, "events", "calendar_id")
+	if err != nil {
+		return err
+	}
+	if !has {
+		// Events from before calendars all go to the primary calendar.
+		// They were always saved with the default color, so that color now
+		// means "use the calendar color": they follow the calendar if its
+		// color changes.
+		if _, err := tx.Exec(`ALTER TABLE events ADD COLUMN calendar_id INTEGER NOT NULL DEFAULT 0`); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(`UPDATE events SET color = '' WHERE color = ?`, primaryCalendarColor); err != nil {
+			return err
+		}
+	}
+	// Also repairs events whose calendar is missing.
+	if _, err := tx.Exec(`
+		UPDATE events SET calendar_id = ?
+		WHERE calendar_id NOT IN (SELECT id FROM calendars)`, primary); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`CREATE INDEX IF NOT EXISTS events_calendar ON events(calendar_id)`); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
-func hasColumn(db *sql.DB, table, column string) (bool, error) {
+// ensurePrimaryCalendar returns the id of the primary calendar, and creates
+// it if there is none.
+func ensurePrimaryCalendar(tx *sql.Tx) (int64, error) {
+	var id int64
+	err := tx.QueryRow(`SELECT id FROM calendars WHERE is_primary = 1 ORDER BY id LIMIT 1`).Scan(&id)
+	if err == nil {
+		return id, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return 0, err
+	}
+	// No primary calendar: use the oldest one, or make a new one.
+	err = tx.QueryRow(`SELECT id FROM calendars ORDER BY id LIMIT 1`).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		now := nowMs()
+		res, err := tx.Exec(`
+			INSERT INTO calendars (name, color, is_primary, created_at, updated_at)
+			VALUES (?, ?, 1, ?, ?)`, primaryCalendarName, primaryCalendarColor, now, now)
+		if err != nil {
+			return 0, err
+		}
+		return res.LastInsertId()
+	}
+	if err != nil {
+		return 0, err
+	}
+	_, err = tx.Exec(`UPDATE calendars SET is_primary = 1 WHERE id = ?`, id)
+	return id, err
+}
+
+type querier interface {
+	Query(query string, args ...any) (*sql.Rows, error)
+}
+
+func hasColumn(db querier, table, column string) (bool, error) {
 	rows, err := db.Query(`SELECT name FROM pragma_table_info(?)`, table)
 	if err != nil {
 		return false, err
@@ -119,7 +228,7 @@ func nowMs() int64              { return time.Now().UnixMilli() }
 // ListEvents returns events that overlap the range [from, to).
 func (s *Store) ListEvents(from, to time.Time) ([]Event, error) {
 	rows, err := s.db.Query(`
-		SELECT id, title, description, color, start_ms, end_ms, reminders
+		SELECT id, calendar_id, title, description, color, start_ms, end_ms, reminders
 		FROM events
 		WHERE start_ms < ? AND end_ms > ?
 		ORDER BY start_ms, end_ms DESC, id`, toMs(to), toMs(from))
@@ -133,7 +242,7 @@ func (s *Store) ListEvents(from, to time.Time) ([]Event, error) {
 		var e Event
 		var start, end int64
 		var reminders string
-		if err := rows.Scan(&e.ID, &e.Title, &e.Description, &e.Color, &start, &end, &reminders); err != nil {
+		if err := rows.Scan(&e.ID, &e.CalendarID, &e.Title, &e.Description, &e.Color, &start, &end, &reminders); err != nil {
 			return nil, err
 		}
 		e.Start, e.End = fromMs(start), fromMs(end)
@@ -148,9 +257,9 @@ func (s *Store) GetEvent(id int64) (Event, error) {
 	var start, end int64
 	var reminders string
 	err := s.db.QueryRow(`
-		SELECT id, title, description, color, start_ms, end_ms, reminders
+		SELECT id, calendar_id, title, description, color, start_ms, end_ms, reminders
 		FROM events WHERE id = ?`, id).
-		Scan(&e.ID, &e.Title, &e.Description, &e.Color, &start, &end, &reminders)
+		Scan(&e.ID, &e.CalendarID, &e.Title, &e.Description, &e.Color, &start, &end, &reminders)
 	if errors.Is(err, sql.ErrNoRows) {
 		return e, ErrNotFound
 	}
@@ -162,9 +271,9 @@ func (s *Store) GetEvent(id int64) (Event, error) {
 func (s *Store) CreateEvent(e Event) (Event, error) {
 	now := nowMs()
 	res, err := s.db.Exec(`
-		INSERT INTO events (title, description, color, start_ms, end_ms, reminders, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		e.Title, e.Description, e.Color, toMs(e.Start), toMs(e.End), encodeReminders(e.Reminders), now, now)
+		INSERT INTO events (calendar_id, title, description, color, start_ms, end_ms, reminders, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		e.CalendarID, e.Title, e.Description, e.Color, toMs(e.Start), toMs(e.End), encodeReminders(e.Reminders), now, now)
 	if err != nil {
 		return e, err
 	}
@@ -178,9 +287,9 @@ func (s *Store) CreateEvent(e Event) (Event, error) {
 func (s *Store) UpdateEvent(e Event) (Event, error) {
 	res, err := s.db.Exec(`
 		UPDATE events
-		SET title = ?, description = ?, color = ?, start_ms = ?, end_ms = ?, reminders = ?, updated_at = ?
+		SET calendar_id = ?, title = ?, description = ?, color = ?, start_ms = ?, end_ms = ?, reminders = ?, updated_at = ?
 		WHERE id = ?`,
-		e.Title, e.Description, e.Color, toMs(e.Start), toMs(e.End), encodeReminders(e.Reminders), nowMs(), e.ID)
+		e.CalendarID, e.Title, e.Description, e.Color, toMs(e.Start), toMs(e.End), encodeReminders(e.Reminders), nowMs(), e.ID)
 	if err != nil {
 		return e, err
 	}
@@ -199,6 +308,113 @@ func (s *Store) DeleteEvent(id int64) error {
 		return ErrNotFound
 	}
 	return nil
+}
+
+// ---- Calendars ----
+
+const calendarColumns = `id, name, description, color, hidden, is_primary`
+
+func scanCalendar(row interface{ Scan(...any) error }) (Calendar, error) {
+	var c Calendar
+	err := row.Scan(&c.ID, &c.Name, &c.Description, &c.Color, &c.Hidden, &c.Primary)
+	return c, err
+}
+
+// ListCalendars returns the primary calendar first, then the others by name.
+func (s *Store) ListCalendars() ([]Calendar, error) {
+	rows, err := s.db.Query(`SELECT ` + calendarColumns + ` FROM calendars
+		ORDER BY is_primary DESC, name COLLATE NOCASE, id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	list := []Calendar{}
+	for rows.Next() {
+		c, err := scanCalendar(rows)
+		if err != nil {
+			return nil, err
+		}
+		list = append(list, c)
+	}
+	return list, rows.Err()
+}
+
+func (s *Store) GetCalendar(id int64) (Calendar, error) {
+	c, err := scanCalendar(s.db.QueryRow(`SELECT `+calendarColumns+` FROM calendars WHERE id = ?`, id))
+	if errors.Is(err, sql.ErrNoRows) {
+		return c, ErrNotFound
+	}
+	return c, err
+}
+
+func (s *Store) PrimaryCalendarID() (int64, error) {
+	var id int64
+	err := s.db.QueryRow(`SELECT id FROM calendars WHERE is_primary = 1 ORDER BY id LIMIT 1`).Scan(&id)
+	return id, err
+}
+
+func (s *Store) CountCalendars() (int, error) {
+	var n int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM calendars`).Scan(&n)
+	return n, err
+}
+
+func (s *Store) CreateCalendar(c Calendar) (Calendar, error) {
+	now := nowMs()
+	res, err := s.db.Exec(`
+		INSERT INTO calendars (name, description, color, hidden, is_primary, created_at, updated_at)
+		VALUES (?, ?, ?, ?, 0, ?, ?)`,
+		c.Name, c.Description, c.Color, c.Hidden, now, now)
+	if err != nil {
+		return c, err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return c, err
+	}
+	return s.GetCalendar(id)
+}
+
+// UpdateCalendar saves name, description, color and hidden. Primary is not changed.
+func (s *Store) UpdateCalendar(c Calendar) (Calendar, error) {
+	res, err := s.db.Exec(`
+		UPDATE calendars SET name = ?, description = ?, color = ?, hidden = ?, updated_at = ?
+		WHERE id = ?`,
+		c.Name, c.Description, c.Color, c.Hidden, nowMs(), c.ID)
+	if err != nil {
+		return c, err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return c, ErrNotFound
+	}
+	return s.GetCalendar(c.ID)
+}
+
+// DeleteCalendar deletes a calendar and all of its events.
+func (s *Store) DeleteCalendar(id int64) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var primary bool
+	err = tx.QueryRow(`SELECT is_primary FROM calendars WHERE id = ?`, id).Scan(&primary)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+	if primary {
+		return ErrPrimary
+	}
+	if _, err := tx.Exec(`DELETE FROM events WHERE calendar_id = ?`, id); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DELETE FROM calendars WHERE id = ?`, id); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // Settings are stored as key/value text pairs.

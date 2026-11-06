@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -210,3 +211,122 @@ func TestMigrateAddsReminders(t *testing.T) {
 		t.Fatalf("old event after migration: %+v %v", e, err)
 	}
 }
+
+func TestMigrateAddsCalendars(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "old.db")
+	db, err := sql.Open("sqlite", "file:"+path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The events table as it was before calendars existed.
+	if _, err := db.Exec(`CREATE TABLE events (
+		id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '',
+		color TEXT NOT NULL DEFAULT '', start_ms INTEGER NOT NULL, end_ms INTEGER NOT NULL,
+		created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, reminders TEXT NOT NULL DEFAULT '[]');
+		INSERT INTO events (title, color, start_ms, end_ms, created_at, updated_at) VALUES ('blue', '#039be5', 0, 1000, 0, 0);
+		INSERT INTO events (title, color, start_ms, end_ms, created_at, updated_at) VALUES ('red', '#d50000', 0, 1000, 0, 0);`); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+
+	for i := 0; i < 2; i++ { // opening twice must not change anything more
+		store, err := OpenStore(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		cals, err := store.ListCalendars()
+		if err != nil || len(cals) != 1 || !cals[0].Primary || cals[0].Name != primaryCalendarName {
+			t.Fatalf("calendars after migration: %+v %v", cals, err)
+		}
+		blue, _ := store.GetEvent(1)
+		red, _ := store.GetEvent(2)
+		if blue.CalendarID != cals[0].ID || red.CalendarID != cals[0].ID {
+			t.Fatalf("events should be in the primary calendar: %+v %+v", blue, red)
+		}
+		// The old default color now means "calendar color"; other colors stay.
+		if blue.Color != "" || red.Color != "#d50000" {
+			t.Fatalf("colors after migration: %q %q", blue.Color, red.Color)
+		}
+		store.Close()
+	}
+}
+
+func TestCalendars(t *testing.T) {
+	srv := newTestServer(t)
+
+	// A new database has one primary calendar.
+	_, body := do(t, srv, "GET", "/api/calendars", "")
+	var cals []Calendar
+	if err := json.Unmarshal([]byte(body), &cals); err != nil || len(cals) != 1 || !cals[0].Primary {
+		t.Fatalf("calendars: %s %v", body, err)
+	}
+	primary := cals[0]
+
+	code, body := do(t, srv, "POST", "/api/calendars", `{"name":"  Work ","color":"#0b8043"}`)
+	if code != http.StatusCreated {
+		t.Fatalf("create calendar: %d %s", code, body)
+	}
+	var work Calendar
+	_ = json.Unmarshal([]byte(body), &work)
+	if work.Name != "Work" || work.Primary || work.Hidden || work.Color != "#0b8043" {
+		t.Fatalf("created calendar: %+v", work)
+	}
+	for _, b := range []string{`{"name":" "}`, `{"name":"x","color":"green"}`, `{"name":"x","primary":true}`} {
+		if code, body := do(t, srv, "POST", "/api/calendars", b); code != http.StatusBadRequest {
+			t.Errorf("expected 400 for %s, got %d %s", b, code, body)
+		}
+	}
+
+	// Only the sent fields change.
+	code, body = do(t, srv, "PUT", "/api/calendars/"+itoa(work.ID), `{"hidden":true}`)
+	_ = json.Unmarshal([]byte(body), &work)
+	if code != http.StatusOK || !work.Hidden || work.Name != "Work" || work.Color != "#0b8043" {
+		t.Fatalf("hide calendar: %d %s", code, body)
+	}
+	if code, _ := do(t, srv, "PUT", "/api/calendars/999", `{"hidden":true}`); code != http.StatusNotFound {
+		t.Fatalf("update missing calendar: %d", code)
+	}
+
+	// Events: no calendarId means the primary calendar; unknown calendars are refused.
+	code, body = do(t, srv, "POST", "/api/events", `{"title":"A","start":"2026-11-06T12:00:00Z","end":"2026-11-06T13:00:00Z"}`)
+	var a Event
+	_ = json.Unmarshal([]byte(body), &a)
+	if code != http.StatusCreated || a.CalendarID != primary.ID {
+		t.Fatalf("event without calendar: %d %s", code, body)
+	}
+	code, body = do(t, srv, "POST", "/api/events",
+		`{"calendarId":`+itoa(work.ID)+`,"title":"B","start":"2026-11-06T12:00:00Z","end":"2026-11-06T13:00:00Z"}`)
+	var b Event
+	_ = json.Unmarshal([]byte(body), &b)
+	if code != http.StatusCreated || b.CalendarID != work.ID {
+		t.Fatalf("event in Work: %d %s", code, body)
+	}
+	if code, body := do(t, srv, "POST", "/api/events",
+		`{"calendarId":999,"title":"C","start":"2026-11-06T12:00:00Z","end":"2026-11-06T13:00:00Z"}`); code != http.StatusBadRequest {
+		t.Fatalf("event in missing calendar: %d %s", code, body)
+	}
+	// Move an event to another calendar.
+	code, body = do(t, srv, "PUT", "/api/events/"+itoa(a.ID),
+		`{"calendarId":`+itoa(work.ID)+`,"title":"A","start":"2026-11-06T12:00:00Z","end":"2026-11-06T13:00:00Z"}`)
+	if code != http.StatusOK || !strings.Contains(body, `"calendarId":`+itoa(work.ID)) {
+		t.Fatalf("move event: %d %s", code, body)
+	}
+
+	// The primary calendar cannot be deleted.
+	if code, _ := do(t, srv, "DELETE", "/api/calendars/"+itoa(primary.ID), ""); code != http.StatusConflict {
+		t.Fatalf("delete primary: %d", code)
+	}
+	// Deleting a calendar deletes its events.
+	if code, _ := do(t, srv, "DELETE", "/api/calendars/"+itoa(work.ID), ""); code != http.StatusNoContent {
+		t.Fatalf("delete calendar: %d", code)
+	}
+	_, body = do(t, srv, "GET", "/api/events?start=2026-11-06T00:00:00Z&end=2026-11-07T00:00:00Z", "")
+	if strings.TrimSpace(body) != "[]" {
+		t.Fatalf("events of a deleted calendar should be gone: %s", body)
+	}
+	if code, _ := do(t, srv, "DELETE", "/api/calendars/"+itoa(work.ID), ""); code != http.StatusNotFound {
+		t.Fatalf("second delete: %d", code)
+	}
+}
+
+func itoa(n int64) string { return strconv.FormatInt(n, 10) }

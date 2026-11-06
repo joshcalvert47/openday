@@ -6,6 +6,7 @@ import MiniMonth from './MiniMonth.jsx';
 import ColorPicker from './ColorPicker.jsx';
 import TimeInput from './TimeInput.jsx';
 import ReminderList from './ReminderList.jsx';
+import Select from './Select.jsx';
 import * as T from '../time.js';
 import { useMedia, TOUCH } from '../useMedia.js';
 
@@ -13,7 +14,7 @@ import { useMedia, TOUCH } from '../useMedia.js';
 // or docked as a panel on the left side of the calendar.
 // `closing`: the floating card plays its closing animation (see Popover).
 export default function EventEditor({
-  draft, settings, tz, today, docked, sheet, anchor, closing, onChange, onSave, onClose, onDelete, onToggleDock,
+  draft, calendars, settings, tz, today, docked, sheet, anchor, closing, onChange, onSave, onClose, onDelete, onToggleDock,
 }) {
   const titleRef = useRef(null);
   const [picker, setPicker] = useState(false);
@@ -161,8 +162,24 @@ export default function EventEditor({
       </div>
 
       <div className="editor-row">
+        <Icon name="calendar" className="row-icon" size={20} />
+        <div className="editor-calendar">
+          <Select
+            aria-label="Calendar"
+            value={draft.calendarId}
+            options={calendars.map((c) => ({ value: c.id, label: c.name, color: c.color }))}
+            onChange={(calendarId) => onChange({ calendarId })}
+          />
+        </div>
+      </div>
+
+      <div className="editor-row">
         <Icon name="palette" className="row-icon" size={20} />
-        <ColorPicker value={draft.color} onChange={(color) => onChange({ color })} />
+        <ColorPicker
+          value={draft.color}
+          calendar={calendars.find((c) => c.id === draft.calendarId)}
+          onChange={(color) => onChange({ color })}
+        />
       </div>
     </div>
   );

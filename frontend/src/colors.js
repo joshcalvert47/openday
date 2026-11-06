@@ -15,7 +15,14 @@ export const COLORS = [
 
 export const DEFAULT_COLOR = '#039be5';
 
-export const colorOf = (e) => e.color || DEFAULT_COLOR;
+// An event without its own color uses the color of its calendar.
+export const colorOf = (e, calendar) => e.color || calendar?.color || DEFAULT_COLOR;
+
+// A color for a new calendar: the first one in the palette that no calendar uses yet.
+export function unusedColor(calendars) {
+  const used = new Set(calendars.map((c) => c.color));
+  return (COLORS.find((c) => !used.has(c.value)) || COLORS[calendars.length % COLORS.length]).value;
+}
 
 // Pick dark or light text so it is readable on the event color.
 export function textOn(hex) {
