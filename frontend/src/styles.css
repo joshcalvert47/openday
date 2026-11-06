@@ -1395,6 +1395,7 @@ body {
   .popover.sheet .editor-bar {
     background: transparent;
     border-radius: 0;
+    padding: 4px 16px 4px 8px;
   }
   .editor-body {
     padding: 8px 16px;

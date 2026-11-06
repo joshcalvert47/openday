@@ -442,6 +442,7 @@ export default function App() {
       onSave={saveDraft}
       onClose={() => setDraft(null)}
       onDelete={draft.id ? () => deleteEvent(draft.id) : null}
+      sheet={phone}
       onToggleDock={phone ? null : () => setDocked(!docked)}
     />
   );

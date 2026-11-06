@@ -62,7 +62,7 @@ How the app works:
 - Phones and touch (breakpoints: 900px and 600px in `styles.css`):
   - Sidebar floats over the calendar and starts closed.
   - Phones (≤600px): no Today or settings button in the header; Settings is at the bottom of the sidebar.
-  - Phones (≤600px): the event form and details card are sheets stuck to the bottom of the screen. No dock button, no dragging the card.
+  - Phones (≤600px): the event form and details card are sheets stuck to the bottom of the screen. No dock button, no dragging the card. In the form sheet, Close is top left and Save top right (so the keyboard never hides Save); Delete stays at the bottom.
   - Breakpoints are shared in `frontend/src/useMedia.js` (`NARROW`, `PHONE`); keep them in sync with `styles.css`.
   - Tap = click. Long press on an event = drag it, or open its menu if the finger does not move. Swipe left/right = next/previous period.
   - After a finger tap opens a card, the "ghost" click from the browser is cancelled (see `eatGhostClick` in `TimeGrid.jsx`).
