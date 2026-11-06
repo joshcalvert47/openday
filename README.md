@@ -1,17 +1,53 @@
 <p align="center">
-  <img src="assets/logo.svg" alt="OpenDay logo" width="128" height="128">
+  <img src="assets/logo.svg" alt="OpenDay logo" width="112" height="112">
 </p>
 
 <h1 align="center">OpenDay</h1>
 
 <p align="center">
-  A self-hosted calendar that looks and works like Google Calendar.<br>
-  Open source. Your data, on your server.
+  <b>A self-hosted calendar that looks and works like Google Calendar.</b><br>
+  Open source. One Docker container. Your data, on your server.
 </p>
 
----
+<p align="center">
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue"></a>
+  <img alt="Go" src="https://img.shields.io/badge/backend-Go-00ADD8?logo=go&logoColor=white">
+  <img alt="React" src="https://img.shields.io/badge/frontend-React-61DAFB?logo=react&logoColor=black">
+  <img alt="SQLite" src="https://img.shields.io/badge/database-SQLite-003B57?logo=sqlite&logoColor=white">
+  <img alt="Docker" src="https://img.shields.io/badge/ships%20as-one%20Docker%20image-2496ED?logo=docker&logoColor=white">
+</p>
 
-## Run
+<p align="center">
+  <a href="#-quick-start">Quick start</a> ·
+  <a href="#-features">Features</a> ·
+  <a href="#-screenshots">Screenshots</a> ·
+  <a href="#-for-developers">For developers</a>
+</p>
+
+<p align="center">
+  <img src="assets/screenshots/week.png" alt="OpenDay week view with several calendars and two time zones" width="900">
+</p>
+
+## 📸 Screenshots
+
+<table>
+  <tr>
+    <td width="50%"><img src="assets/screenshots/form.png" alt="Create an event"><br><p align="center"><b>Create events</b> — time, time zone, notifications, calendar, color</p></td>
+    <td width="50%"><img src="assets/screenshots/details.png" alt="Event details card"><br><p align="center"><b>Event details</b> — edit or delete in one click</p></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="assets/screenshots/month-dark.png" alt="Month view in dark theme"><br><p align="center"><b>Month view</b> — with dark theme</p></td>
+    <td width="50%"><img src="assets/screenshots/year.png" alt="Year view"><br><p align="center"><b>Year view</b> — the whole year at a glance</p></td>
+  </tr>
+</table>
+
+<p align="center">
+  <img src="assets/screenshots/phone.png" alt="OpenDay on a phone" width="260"><br>
+  <b>Works on phones</b> — tap, long-press, swipe
+</p>
+
+
+## 🚀 Quick start
 
 You need [Docker](https://docs.docker.com/get-docker/).
 
@@ -26,7 +62,7 @@ Open **http://localhost:8080**.
 
 Your events are saved in the `openday-data` volume.
 
-## Commands
+## 🧰 Commands
 
 | What | Command |
 | --- | --- |
@@ -36,7 +72,7 @@ Your events are saved in the `openday-data` volume.
 | Delete the app (keeps your data) | `docker rm -f openday` |
 | Delete your data too | `docker volume rm openday-data` |
 
-## Update
+## 🔄 Update
 
 ```bash
 git pull
@@ -47,7 +83,7 @@ docker run -d --name openday -p 8080:8080 -v openday-data:/data --restart unless
 
 Your data stays in the volume.
 
-## Features
+## ✨ Features
 
 - Day, week, month and year views.
 - Click the calendar to add an event. Drag to pick a time range.
@@ -63,7 +99,7 @@ Your data stays in the volume.
 - Works on phones: tap to add or open, hold an event to drag it or open its menu, swipe to change the day/week/month.
 - Keyboard shortcuts: `D` `W` `M` `Y` (views), `T` (today), `J`/`K` (next/previous), `C` (create).
 
-## For developers
+## 🛠️ For developers
 
 Run the backend (Go) and the frontend (Vite) in two terminals:
 
@@ -79,6 +115,6 @@ Open http://localhost:5173. Run the backend tests with `cd backend && go test ./
 
 AI coding agents should read [`AGENTS.md`](AGENTS.md) first.
 
-## License
+## 📄 License
 
 [MIT](LICENSE)
