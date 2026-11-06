@@ -1013,6 +1013,99 @@ button {
   accent-color: var(--primary);
 }
 
+/* ---------- Notifications ---------- */
+
+.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: 40px;
+  padding-left: 8px;
+  cursor: pointer;
+}
+.checkbox input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--primary);
+}
+.settings-note {
+  max-width: 400px;
+  margin: -4px 0 12px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+.text-btn.inline {
+  height: auto;
+  padding: 0;
+  border-radius: 0;
+}
+.text-btn.inline:hover {
+  background: none;
+  text-decoration: underline;
+}
+.reminders {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+.reminder {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.reminder-number {
+  width: 64px;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
+  outline: none;
+}
+.reminder-number:focus {
+  border-color: var(--primary);
+  box-shadow: inset 0 0 0 1px var(--primary);
+}
+.reminder-number.invalid {
+  border-color: var(--danger);
+  box-shadow: inset 0 0 0 1px var(--danger);
+}
+.reminder .reminder-unit {
+  width: 120px;
+  height: 32px;
+}
+.add-reminder {
+  height: 32px;
+  margin-left: -12px;
+}
+.alert-backdrop {
+  z-index: 1300;
+}
+.alert {
+  width: min(360px, calc(100vw - 32px));
+}
+.alert-item {
+  display: flex;
+  gap: 16px;
+  padding: 4px 0;
+}
+.alert-item .row-icon {
+  margin-top: 2px;
+}
+.alert-title {
+  font-size: 18px;
+}
+.alert-when {
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
 /* ---------- Snackbar ---------- */
 
 .snackbar {

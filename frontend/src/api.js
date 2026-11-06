@@ -13,13 +13,19 @@ async function request(method, path, body) {
 }
 
 // Events use instants in milliseconds in the app, and ISO strings on the wire.
-const fromWire = (e) => ({ ...e, start: Date.parse(e.start), end: Date.parse(e.end) });
+const fromWire = (e) => ({
+  ...e,
+  start: Date.parse(e.start),
+  end: Date.parse(e.end),
+  reminders: e.reminders || [],
+});
 const toWire = (e) => ({
   title: e.title,
   description: e.description,
   color: e.color,
   start: new Date(e.start).toISOString(),
   end: new Date(e.end).toISOString(),
+  reminders: e.reminders || [],
 });
 
 export const api = {

@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -17,6 +18,8 @@ type Event struct {
 	Color       string    `json:"color"`
 	Start       time.Time `json:"start"`
 	End         time.Time `json:"end"`
+	// Reminders are notification times in minutes before the start (sorted, no duplicates).
+	Reminders []int `json:"reminders"`
 }
 
 var ErrNotFound = errors.New("not found")
@@ -58,7 +61,53 @@ func OpenStore(path string) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("create schema: %w", err)
 	}
+	if err := migrate(db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("migrate: %w", err)
+	}
 	return &Store{db: db}, nil
+}
+
+// migrate adds columns that older databases do not have yet.
+func migrate(db *sql.DB) error {
+	has, err := hasColumn(db, "events", "reminders")
+	if err != nil || has {
+		return err
+	}
+	_, err = db.Exec(`ALTER TABLE events ADD COLUMN reminders TEXT NOT NULL DEFAULT '[]'`)
+	return err
+}
+
+func hasColumn(db *sql.DB, table, column string) (bool, error) {
+	rows, err := db.Query(`SELECT name FROM pragma_table_info(?)`, table)
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return false, err
+		}
+		if name == column {
+			return true, nil
+		}
+	}
+	return false, rows.Err()
+}
+
+func encodeReminders(r []int) string {
+	if r == nil {
+		r = []int{}
+	}
+	b, _ := json.Marshal(r)
+	return string(b)
+}
+
+func decodeReminders(s string) []int {
+	r := []int{}
+	_ = json.Unmarshal([]byte(s), &r)
+	return r
 }
 
 func (s *Store) Close() error { return s.db.Close() }
@@ -70,7 +119,7 @@ func nowMs() int64              { return time.Now().UnixMilli() }
 // ListEvents returns events that overlap the range [from, to).
 func (s *Store) ListEvents(from, to time.Time) ([]Event, error) {
 	rows, err := s.db.Query(`
-		SELECT id, title, description, color, start_ms, end_ms
+		SELECT id, title, description, color, start_ms, end_ms, reminders
 		FROM events
 		WHERE start_ms < ? AND end_ms > ?
 		ORDER BY start_ms, end_ms DESC, id`, toMs(to), toMs(from))
@@ -83,10 +132,12 @@ func (s *Store) ListEvents(from, to time.Time) ([]Event, error) {
 	for rows.Next() {
 		var e Event
 		var start, end int64
-		if err := rows.Scan(&e.ID, &e.Title, &e.Description, &e.Color, &start, &end); err != nil {
+		var reminders string
+		if err := rows.Scan(&e.ID, &e.Title, &e.Description, &e.Color, &start, &end, &reminders); err != nil {
 			return nil, err
 		}
 		e.Start, e.End = fromMs(start), fromMs(end)
+		e.Reminders = decodeReminders(reminders)
 		events = append(events, e)
 	}
 	return events, rows.Err()
@@ -95,23 +146,25 @@ func (s *Store) ListEvents(from, to time.Time) ([]Event, error) {
 func (s *Store) GetEvent(id int64) (Event, error) {
 	var e Event
 	var start, end int64
+	var reminders string
 	err := s.db.QueryRow(`
-		SELECT id, title, description, color, start_ms, end_ms
+		SELECT id, title, description, color, start_ms, end_ms, reminders
 		FROM events WHERE id = ?`, id).
-		Scan(&e.ID, &e.Title, &e.Description, &e.Color, &start, &end)
+		Scan(&e.ID, &e.Title, &e.Description, &e.Color, &start, &end, &reminders)
 	if errors.Is(err, sql.ErrNoRows) {
 		return e, ErrNotFound
 	}
 	e.Start, e.End = fromMs(start), fromMs(end)
+	e.Reminders = decodeReminders(reminders)
 	return e, err
 }
 
 func (s *Store) CreateEvent(e Event) (Event, error) {
 	now := nowMs()
 	res, err := s.db.Exec(`
-		INSERT INTO events (title, description, color, start_ms, end_ms, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		e.Title, e.Description, e.Color, toMs(e.Start), toMs(e.End), now, now)
+		INSERT INTO events (title, description, color, start_ms, end_ms, reminders, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		e.Title, e.Description, e.Color, toMs(e.Start), toMs(e.End), encodeReminders(e.Reminders), now, now)
 	if err != nil {
 		return e, err
 	}
@@ -125,9 +178,9 @@ func (s *Store) CreateEvent(e Event) (Event, error) {
 func (s *Store) UpdateEvent(e Event) (Event, error) {
 	res, err := s.db.Exec(`
 		UPDATE events
-		SET title = ?, description = ?, color = ?, start_ms = ?, end_ms = ?, updated_at = ?
+		SET title = ?, description = ?, color = ?, start_ms = ?, end_ms = ?, reminders = ?, updated_at = ?
 		WHERE id = ?`,
-		e.Title, e.Description, e.Color, toMs(e.Start), toMs(e.End), nowMs(), e.ID)
+		e.Title, e.Description, e.Color, toMs(e.Start), toMs(e.End), encodeReminders(e.Reminders), nowMs(), e.ID)
 	if err != nil {
 		return e, err
 	}

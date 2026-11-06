@@ -176,3 +176,32 @@ export function parseTime(text, timeFormat, partial = false) {
   }
   return [h * 60 + m];
 }
+
+// Notification times, in minutes before the event start.
+// "At time of event", "10 minutes before", "1 hour before", "2 days before", "1 week before".
+export function formatReminder(minutes) {
+  if (minutes === 0) return 'At time of event';
+  const units = [
+    [7 * 24 * 60, 'week'],
+    [24 * 60, 'day'],
+    [60, 'hour'],
+    [1, 'minute'],
+  ];
+  const [size, name] = units.find(([u]) => minutes % u === 0);
+  const n = minutes / size;
+  return `${n} ${name}${n === 1 ? '' : 's'} before`;
+}
+
+// Units for a notification time: "10 [minutes]", "2 [hours]", "3 [days]", "1 [week]".
+export const REMINDER_UNITS = [
+  { value: 1, one: 'minute', many: 'minutes' },
+  { value: 60, one: 'hour', many: 'hours' },
+  { value: 24 * 60, one: 'day', many: 'days' },
+  { value: 7 * 24 * 60, one: 'week', many: 'weeks' },
+];
+export const MAX_REMINDER = 4 * 7 * 24 * 60; // 4 weeks, same as the backend
+
+// The largest unit that fits exactly: 120 -> 2 hours, 90 -> 90 minutes.
+export function bestReminderUnit(minutes) {
+  return [...REMINDER_UNITS].reverse().find((u) => minutes % u.value === 0 && minutes > 0)?.value ?? 1;
+}

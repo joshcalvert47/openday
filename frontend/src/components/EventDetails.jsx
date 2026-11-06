@@ -40,6 +40,16 @@ export default function EventDetails({ event, tz, settings, anchor, onClose, onE
           <div className="details-desc">{event.description}</div>
         </div>
       )}
+      {event.reminders?.length > 0 && (
+        <div className="details-row">
+          <Icon name="notifications" size={20} className="row-icon" />
+          <div className="details-desc">
+            {event.reminders.map((m) => (
+              <div key={m}>{T.formatReminder(m)}</div>
+            ))}
+          </div>
+        </div>
+      )}
     </Popover>
   );
 }

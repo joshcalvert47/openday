@@ -55,7 +55,8 @@ Your data stays in the volume.
 - Events have a title, description and color. Events can overlap.
 - Right-click an event to change its color or delete it.
 - The event form can float or be docked to the side. On phones it slides up from the bottom.
-- Settings: date format, time format, time zone, default event length.
+- Notifications: each event can have up to 5 reminders ("30 minutes before"). Set any number of minutes, hours, days or weeks (up to 4 weeks). Shown as desktop notifications (with Snooze) or as alerts in the page, with an optional sound. The calendar must be open in a browser tab.
+- Settings: date format, time format, time zone, default event length, default notification, notification settings.
 - Light, dark or device theme.
 - Works on phones: tap to add or open, hold an event to drag it or open its menu, swipe to change the day/week/month.
 - Keyboard shortcuts: `D` `W` `M` `Y` (views), `T` (today), `J`/`K` (next/previous), `C` (create).

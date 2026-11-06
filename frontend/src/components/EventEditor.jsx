@@ -5,6 +5,7 @@ import Popover from './Popover.jsx';
 import MiniMonth from './MiniMonth.jsx';
 import ColorPicker from './ColorPicker.jsx';
 import TimeInput from './TimeInput.jsx';
+import ReminderList from './ReminderList.jsx';
 import * as T from '../time.js';
 
 // Form to create or edit an event. Shown as a floating card next to the event,
@@ -141,6 +142,16 @@ export default function EventEditor({
           rows={docked ? 6 : 3}
           value={draft.description}
           onChange={(e) => onChange({ description: e.target.value })}
+        />
+      </div>
+
+      <div className="editor-row">
+        <Icon name="notifications" className="row-icon" size={20} />
+        <ReminderList
+          key={draft.id ?? 'new'}
+          value={draft.reminders || []}
+          defaultReminder={settings.defaultReminder}
+          onChange={(reminders) => onChange({ reminders })}
         />
       </div>
 

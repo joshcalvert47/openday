@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -43,6 +44,8 @@ const (
 	maxDescriptionLen = 20000
 	maxEventLength    = 366 * 24 * time.Hour
 	maxBodyBytes      = 1 << 20
+	maxReminders      = 5
+	maxReminderMins   = 4 * 7 * 24 * 60 // 4 weeks
 )
 
 var colorRe = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
@@ -53,6 +56,7 @@ type eventInput struct {
 	Color       string    `json:"color"`
 	Start       time.Time `json:"start"`
 	End         time.Time `json:"end"`
+	Reminders   []int     `json:"reminders"`
 }
 
 func (in eventInput) validate() (Event, error) {
@@ -62,8 +66,20 @@ func (in eventInput) validate() (Event, error) {
 		Color:       in.Color,
 		Start:       in.Start.UTC(),
 		End:         in.End.UTC(),
+		Reminders:   []int{},
 	}
+	for _, m := range in.Reminders {
+		if m < 0 || m > maxReminderMins {
+			return e, errors.New("reminders must be between 0 minutes and 4 weeks before the event")
+		}
+		if !contains(e.Reminders, m) {
+			e.Reminders = append(e.Reminders, m)
+		}
+	}
+	sort.Ints(e.Reminders)
 	switch {
+	case len(e.Reminders) > maxReminders:
+		return e, errors.New("too many reminders")
 	case in.Start.IsZero() || in.End.IsZero():
 		return e, errors.New("start and end are required")
 	case !e.End.After(e.Start):
@@ -166,6 +182,14 @@ type Settings struct {
 	TimeZone        string `json:"timeZone"`        // IANA name, e.g. "Europe/Berlin"
 	DefaultDuration int    `json:"defaultDuration"` // minutes
 	Theme           string `json:"theme"`           // "system", "light" or "dark"
+	// Notifications: "off", "desktop" (system notifications) or "alerts" (alert in the page).
+	Notifications string `json:"notifications"`
+	// SnoozeBefore: a snoozed notification shows again this many minutes before the event.
+	SnoozeBefore int `json:"snoozeBefore"`
+	// NotificationSound: play a sound with each notification.
+	NotificationSound bool `json:"notificationSound"`
+	// DefaultReminder: minutes before the event for new events, or -1 for no notification.
+	DefaultReminder int `json:"defaultReminder"`
 }
 
 var defaultSettings = Settings{
@@ -174,6 +198,11 @@ var defaultSettings = Settings{
 	TimeZone:        "",
 	DefaultDuration: 60,
 	Theme:           "system",
+
+	Notifications:     "desktop",
+	SnoozeBefore:      1,
+	NotificationSound: true,
+	DefaultReminder:   30,
 }
 
 var (
@@ -181,7 +210,18 @@ var (
 	allowedTimeFormats = []string{"12h", "24h"}
 	allowedThemes      = []string{"system", "light", "dark"}
 	allowedDurations   = []int{15, 20, 30, 45, 60, 90, 120}
+	allowedNotify      = []string{"off", "desktop", "alerts"}
+	allowedSnooze      = []int{0, 1, 5, 10, 15, 30}
+	allowedDefaultRem  = []int{-1, 0, 5, 10, 15, 30, 60, 120, 1440, 2880, 10080}
 )
+
+func intSetting(raw map[string]string, key string, allowed []int, dst *int) {
+	if v, ok := raw[key]; ok {
+		if n, err := strconv.Atoi(v); err == nil && contains(allowed, n) {
+			*dst = n
+		}
+	}
+}
 
 func contains[T comparable](list []T, v T) bool {
 	for _, x := range list {
@@ -215,6 +255,14 @@ func (a *API) loadSettings() (Settings, error) {
 	if v, ok := raw["theme"]; ok && contains(allowedThemes, v) {
 		s.Theme = v
 	}
+	if v, ok := raw["notifications"]; ok && contains(allowedNotify, v) {
+		s.Notifications = v
+	}
+	intSetting(raw, "snoozeBefore", allowedSnooze, &s.SnoozeBefore)
+	if v, ok := raw["notificationSound"]; ok {
+		s.NotificationSound = v == "true"
+	}
+	intSetting(raw, "defaultReminder", allowedDefaultRem, &s.DefaultReminder)
 	return s, nil
 }
 
@@ -235,6 +283,11 @@ func (a *API) putSettings(w http.ResponseWriter, r *http.Request) {
 		TimeZone        *string `json:"timeZone"`
 		DefaultDuration *int    `json:"defaultDuration"`
 		Theme           *string `json:"theme"`
+
+		Notifications     *string `json:"notifications"`
+		SnoozeBefore      *int    `json:"snoozeBefore"`
+		NotificationSound *bool   `json:"notificationSound"`
+		DefaultReminder   *int    `json:"defaultReminder"`
 	}
 	if !readJSON(w, r, &in) {
 		return
@@ -276,6 +329,30 @@ func (a *API) putSettings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		values["theme"] = *in.Theme
+	}
+	if in.Notifications != nil {
+		if !contains(allowedNotify, *in.Notifications) {
+			writeError(w, http.StatusBadRequest, "invalid notifications")
+			return
+		}
+		values["notifications"] = *in.Notifications
+	}
+	if in.SnoozeBefore != nil {
+		if !contains(allowedSnooze, *in.SnoozeBefore) {
+			writeError(w, http.StatusBadRequest, "invalid snoozeBefore")
+			return
+		}
+		values["snoozeBefore"] = strconv.Itoa(*in.SnoozeBefore)
+	}
+	if in.NotificationSound != nil {
+		values["notificationSound"] = strconv.FormatBool(*in.NotificationSound)
+	}
+	if in.DefaultReminder != nil {
+		if !contains(allowedDefaultRem, *in.DefaultReminder) {
+			writeError(w, http.StatusBadRequest, "invalid defaultReminder")
+			return
+		}
+		values["defaultReminder"] = strconv.Itoa(*in.DefaultReminder)
 	}
 	if err := a.store.SetSettings(values); err != nil {
 		serverError(w, err)
