@@ -22,7 +22,8 @@ Commands:
 | Run backend (dev) | `cd backend && go run .` (listens on `:8080`, database `openday.db`) |
 | Run frontend (dev) | `cd frontend && npm install && npm run dev` (Vite on `:5173`, proxies `/api` to `:8080`) |
 | Backend tests | `cd backend && go test ./...` |
-| Frontend build | `cd frontend && npm run build` |
+| Frontend build | `cd frontend && npm run build` (type-checks, then builds) |
+| Frontend type check | `cd frontend && npm run typecheck` |
 | Docker image | `docker build -t openday .` |
 | Lint | none yet |
 
@@ -45,11 +46,11 @@ Smaller decisions (made in the first version; change them only after asking the 
 | --- | --- |
 | Go HTTP routing | Standard library `net/http` (`ServeMux` with method patterns). No web framework. |
 | SQLite driver | `modernc.org/sqlite` (pure Go, no CGO, so the Docker build stays simple). |
-| Frontend language | JavaScript (JSX). No TypeScript yet. |
-| Frontend libraries | Only `react` and `react-dom`. No router, state or date library. |
+| Frontend language | TypeScript (TSX), `strict` mode (`frontend/tsconfig.json`). `npm run build` type-checks first (`tsc`), so type errors fail the build. Shared data types are in `frontend/src/types.ts`. Only `frontend/public/sw.js` stays plain JavaScript (the browser loads it as is). |
+| Frontend libraries | Only `react` and `react-dom` (plus `typescript` and `@types/*` at build time). No router, state or date library. |
 | Styling | One plain CSS file (`frontend/src/styles.css`) with CSS variables for light/dark themes. |
-| Icons | Inline SVG paths in `frontend/src/icons.jsx` (Material Design icon shapes, Apache 2.0). |
-| Time zones | Browser `Intl` API (`frontend/src/time.js`). Go embeds `time/tzdata`. |
+| Icons | Inline SVG paths in `frontend/src/icons.tsx` (Material Design icon shapes, Apache 2.0). |
+| Time zones | Browser `Intl` API (`frontend/src/time.ts`). Go embeds `time/tzdata`. |
 | Final Docker image | `alpine`, runs as a non-root user, data in `/data`. |
 
 How the app works:
@@ -61,11 +62,11 @@ How the app works:
   - The calendar time zone drop-down (create form and calendar page) offers only the primary time zone and the "Other time zones" from General settings (plus the calendar's own, if it was removed from settings since). A link under it opens General → Time zone to add more.
   - There is always one primary calendar ("My calendar", made by `migrate` in `store.go`). It is listed first and cannot be deleted. New events go to it. An event sent without `calendarId` also goes to it.
   - `migrate` puts events from older databases in the primary calendar. Their color `#039be5` (the old default) becomes `''`.
-  - Event color `''` means "use the calendar color" (`colorOf(event, calendar)` in `colors.js`). New events use it. The color picker shows it as the first swatch.
+  - Event color `''` means "use the calendar color" (`colorOf(event, calendar)` in `colors.ts`). New events use it. The color picker shows it as the first swatch.
   - `PUT /api/calendars/{id}` changes only the fields that are sent (e.g. `{"hidden":true}`).
   - Deleting a calendar deletes its events (after a confirm dialog).
-  - Sidebar: a colored checkbox shows or hides a calendar (`hidden` is saved in the database, so it follows the user). The ⋮ button (or right-click) opens "Display this only", "Settings" and colors (`CalendarMenu.jsx`). The + button opens Settings at "Create new calendar".
-  - Settings page (`SettingsPage.jsx`) has separate pages, like the classic calendar. The left menu has groups that open and close: "General" (one scrolling page: date and time, time zone, events, notifications, appearance, keyboard shortcuts; the menu jumps to each part and marks the one in view), "Add calendar" → "Create new calendar", and "Settings for my calendars" → one page per calendar (`CalendarSettings.jsx`: name, description, time zone, color, delete).
+  - Sidebar: a colored checkbox shows or hides a calendar (`hidden` is saved in the database, so it follows the user). The ⋮ button (or right-click) opens "Display this only", "Settings" and colors (`CalendarMenu.tsx`). The + button opens Settings at "Create new calendar".
+  - Settings page (`SettingsPage.tsx`) has separate pages, like the classic calendar. The left menu has groups that open and close: "General" (one scrolling page: date and time, time zone, events, notifications, appearance, keyboard shortcuts; the menu jumps to each part and marks the one in view), "Add calendar" → "Create new calendar", and "Settings for my calendars" → one page per calendar (`CalendarSettings.tsx`: name, description, time zone, color, delete).
   - New calendars start with "Same as primary time zone" and a color no other calendar uses; both can be changed in the create form.
   - Calendar fields save when they lose focus; time zone and color save right away.
   - Only one menu group is open at a time. Opening a page (group title or item) opens its group and closes the others. Groups open and close with a height animation (CSS `grid-template-rows`), off when animations are off.
@@ -75,15 +76,15 @@ How the app works:
 - Events are stored as UTC Unix milliseconds. The frontend shows them in the time zone from settings.
 - Time zones:
   - Settings → Time zone: "Primary time zone" (`timeZone`, '' = device) and "Other time zones" (`otherTimeZones`, up to 5 IANA names, stored as a JSON array in the settings table).
-  - Day/week grid: each other time zone gets its own hour column left of the primary one (`extraZones` in `App.jsx`, `.tg-gutter.extra`). Not on phones (no room).
+  - Day/week grid: each other time zone gets its own hour column left of the primary one (`extraZones` in `App.tsx`, `.tg-gutter.extra`). Not on phones (no room).
   - Each event has `timeZone` (`time_zone` column; '' = the primary time zone). The event form shows its times in that zone. The form's time zone drop-down offers only the primary zone and the other time zones from settings (plus the event's own if it was removed from settings), and is hidden when there is no other choice. Changing it keeps the clock times (9am stays 9am, in the new zone), like the classic calendar.
-  - A new event takes the time zone of its calendar (`calendarZone` in `frontend/src/calendars.js`). The moment stays the same (the clicked slot); the form shows it in that zone. Changing the calendar of a new event also changes the zone, until the user picks a time zone by hand (`zoneSet` on the draft, not saved).
+  - A new event takes the time zone of its calendar (`calendarZone` in `frontend/src/calendars.ts`). The moment stays the same (the clicked slot); the form shows it in that zone. Changing the calendar of a new event also changes the zone, until the user picks a time zone by hand (`zoneSet` on the draft, not saved).
   - The grid always draws events in the primary time zone. The details card adds a line with the time in the event's zone when it differs.
 - Settings (date format, time format, time zone, default duration, default notification, notification settings, theme, animations, keyboard shortcuts) are stored in the database, so they follow the user across browsers.
-- Notifications (`frontend/src/notifications.js`):
+- Notifications (`frontend/src/notifications.ts`):
   - Each event has `reminders`: up to 5 times in minutes before the start (0 to 4 weeks). Stored as a JSON array in the `reminders` column (added by `migrate` in `store.go` for older databases).
   - New events get the "Default notification" from settings.
-  - In the event form, each notification is a number field plus a unit drop-down (minutes, hours, days, weeks), like the classic calendar (`ReminderList.jsx`). The value is stored in minutes, so the unit is not saved: a reopened event shows the largest unit that fits ("60 minutes" comes back as "1 hour"). Numbers outside 0 to 4 weeks are marked red and not saved; leaving the field puts back the last good value. Changing the unit keeps the number (capped at 4 weeks).
+  - In the event form, each notification is a number field plus a unit drop-down (minutes, hours, days, weeks), like the classic calendar (`ReminderList.tsx`). The value is stored in minutes, so the unit is not saved: a reopened event shows the largest unit that fits ("60 minutes" comes back as "1 hour"). Numbers outside 0 to 4 weeks are marked red and not saved; leaving the field puts back the last good value. Changing the unit keeps the number (capped at 4 weeks).
   - The page checks every 10 seconds which reminders are due. There is no server push, so a calendar tab must be open. Reminders more than 10 minutes late are skipped.
   - "Notifications" setting: Off, Desktop notifications (browser `Notification` API), or Alerts (dialog in the page). If the browser blocks desktop notifications, alerts are used instead.
   - Desktop notifications are shown by a small service worker (`frontend/public/sw.js`) so they can have a Snooze button. A snoozed notification shows again "Show snoozed notifications" minutes before the event (or 5 minutes later if that time has passed).
@@ -93,26 +94,26 @@ How the app works:
 - Small per-browser preferences (current view, sidebar open) are kept in `localStorage`.
 - Animations (CSS only, in the "Animations" section at the end of `styles.css`):
   - Sidebar (grows/shrinks on wide screens, slides in on tablets and phones), event details card, floating event form and right-click menu (fade and grow), phone sheets (slide up and down), docking the form (the panel grows while the sidebar shrinks), dialogs, snackbar.
-  - Closing animations: `useExit` in `frontend/src/motion.js` keeps a closing element on the page (class `closing`) until its animation ends. Its `key` is used as a React key with a prefix (`details-3`), so siblings never share a key.
+  - Closing animations: `useExit` in `frontend/src/motion.ts` keeps a closing element on the page (class `closing`) until its animation ends. Its `key` is used as a React key with a prefix (`details-3`), so siblings never share a key.
   - The "Show animations" setting (Settings → Appearance, stored as `animations`) sets `data-motion` on `<html>`. Off, or the device asks for reduced motion (`prefers-reduced-motion`): no animations at all.
-  - Motion made in JavaScript (e.g. `scrollTo` with `behavior: 'smooth'`) must check `motionOn()` from `motion.js`, because the CSS rule cannot turn it off.
-  - Keep animations short (about 150 to 200 ms). `EXIT_MS` in `motion.js` must be at least the longest closing animation.
-- Drop-downs: no browser `<select>`. Use `Select.jsx` (styled list, keyboard and type-ahead). Long lists (time zones) use `SearchSelect.jsx`: type to search, the list scrolls to the best match in real time (nothing is hidden). Enter on typed text that matches nothing keeps the old value. A value not in the options shows the placeholder. Lists are drawn by `DropdownList.jsx` in `document.body` and follow their field (e.g. when the form is dragged).
-- Event times use `TimeInput.jsx`: pick from the list or type any time ("9", "930", "9:30pm", "21:15"). While typing, the list scrolls to the closest option. Typed text is read by `parseTime` in `time.js`. In 12h format, a time without am/pm picks the one closest to the current start (start field) or the first one after the start (end field).
+  - Motion made in JavaScript (e.g. `scrollTo` with `behavior: 'smooth'`) must check `motionOn()` from `motion.ts`, because the CSS rule cannot turn it off.
+  - Keep animations short (about 150 to 200 ms). `EXIT_MS` in `motion.ts` must be at least the longest closing animation.
+- Drop-downs: no browser `<select>`. Use `Select.tsx` (styled list, keyboard and type-ahead). Long lists (time zones) use `SearchSelect.tsx`: type to search, the list scrolls to the best match in real time (nothing is hidden). Enter on typed text that matches nothing keeps the old value. A value not in the options shows the placeholder. Lists are drawn by `DropdownList.tsx` in `document.body` and follow their field (e.g. when the form is dragged).
+- Event times use `TimeInput.tsx`: pick from the list or type any time ("9", "930", "9:30pm", "21:15"). While typing, the list scrolls to the closest option. Typed text is read by `parseTime` in `time.ts`. In 12h format, a time without am/pm picks the one closest to the current start (start field) or the first one after the start (end field).
 - The event form always opens floating. The user can dock it; it is never docked by default.
 - Phones and touch (breakpoints: 900px and 600px in `styles.css`):
   - Sidebar floats over the calendar and starts closed.
   - Phones (≤600px): no Today or settings button in the header; Settings is at the bottom of the sidebar.
   - Phones (≤600px): the event form and details card are sheets stuck to the bottom of the screen. No dock button, no dragging the card. In the form sheet, Close is top left and Save top right (so the keyboard never hides Save). No Delete button in the form sheet: delete from the details card or the long-press menu.
-  - Touch devices (`TOUCH` in `useMedia.js`): the event form does not focus the title on open, so the keyboard only opens when the user taps a field.
-  - On-screen keyboard: Android Chrome resizes the page (`interactive-widget=resizes-content` in `index.html`). iOS Safari does not, so `keyboard.js` measures `window.visualViewport` and sets `--kb-inset` and `--vv-height`; the sheet uses them to stay above the keyboard. The focused field in a sheet is scrolled back into view.
-  - Breakpoints are shared in `frontend/src/useMedia.js` (`NARROW`, `PHONE`); keep them in sync with `styles.css`.
+  - Touch devices (`TOUCH` in `useMedia.ts`): the event form does not focus the title on open, so the keyboard only opens when the user taps a field.
+  - On-screen keyboard: Android Chrome resizes the page (`interactive-widget=resizes-content` in `index.html`). iOS Safari does not, so `keyboard.ts` measures `window.visualViewport` and sets `--kb-inset` and `--vv-height`; the sheet uses them to stay above the keyboard. The focused field in a sheet is scrolled back into view.
+  - Breakpoints are shared in `frontend/src/useMedia.ts` (`NARROW`, `PHONE`); keep them in sync with `styles.css`.
   - Tap = click. Long press on an event = drag it, or open its menu if the finger does not move. Swipe left/right = next/previous period.
-  - After a finger tap opens a card, the "ghost" click from the browser is cancelled (see `eatGhostClick` in `TimeGrid.jsx`).
+  - After a finger tap opens a card, the "ghost" click from the browser is cancelled (see `eatGhostClick` in `TimeGrid.tsx`).
   - Test with Playwright device emulation (e.g. `devices['Pixel 7']`) and touch events.
 - Keyboard shortcuts (like the classic calendar):
-  - Keys are handled in `App.jsx` (`keyHandler`). The list shown to the user is `SHORTCUT_GROUPS` in `frontend/src/shortcuts.js`; keep both in sync.
-  - `?` (or Settings menu → Keyboard shortcuts) opens `ShortcutsDialog.jsx`.
+  - Keys are handled in `App.tsx` (`keyHandler`). The list shown to the user is `SHORTCUT_GROUPS` in `frontend/src/shortcuts.ts`; keep both in sync.
+  - `?` (or Settings menu → Keyboard shortcuts) opens `ShortcutsDialog.tsx`.
   - Setting "Enable keyboard shortcuts" (Settings → Keyboard shortcuts, stored as `keyboardShortcuts`, on by default). Off: only `Esc` works, and tooltips/menus show no keys.
   - When on, tooltips show the key ("Next week (J)", "Create (C)") and the view menu shows D/W/M/Y.
   - Phones and touch devices: no key hints, no dialog, no settings section.
