@@ -671,6 +671,16 @@ button {
   box-shadow: var(--shadow);
 }
 
+[data-popover] [data-drag-handle] {
+  cursor: grab;
+  touch-action: none;
+}
+.popover.dragging,
+.popover.dragging [data-drag-handle] {
+  cursor: grabbing;
+  user-select: none;
+}
+
 .menu-backdrop {
   position: fixed;
   inset: 0;

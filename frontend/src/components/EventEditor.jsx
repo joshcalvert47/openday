@@ -44,7 +44,7 @@ export default function EventEditor({
 
   const form = (
     <form className={`editor ${docked ? 'docked' : ''}`} onSubmit={submit}>
-      <div className="editor-bar">
+      <div className="editor-bar" data-drag-handle={docked ? undefined : true}>
         <button
           type="button"
           className="icon-btn sm"

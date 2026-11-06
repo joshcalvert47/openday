@@ -16,7 +16,7 @@ export function describeWhen(event, tz, settings) {
 export default function EventDetails({ event, tz, settings, anchor, onClose, onEdit, onDelete }) {
   return (
     <Popover anchor={anchor} onClose={onClose} className="details" label="Event details">
-      <div className="details-bar">
+      <div className="details-bar" data-drag-handle>
         <button className="icon-btn sm" onClick={onEdit} aria-label="Edit event" title="Edit event">
           <Icon name="edit" size={20} />
         </button>
