@@ -24,7 +24,7 @@ const DEFAULT_SETTINGS = {
 
 const VIEWS = ['day', 'week', 'month', 'year'];
 
-// Small per-browser preferences (current view, sidebar open, editor docked).
+// Small per-browser preferences (current view, sidebar open).
 function useLocalState(key, initial) {
   const [value, setValue] = useState(() => {
     try {
@@ -79,7 +79,8 @@ export default function App() {
   const setView = (v) => VIEWS.includes(v) && setViewRaw(v);
   const [cursor, setCursor] = useState(() => T.startOfDay(T.toWall(Date.now(), T.browserTimeZone())));
   const [sidebarOpen, setSidebarOpen] = useLocalState('openday.sidebarOpen', true);
-  const [docked, setDocked] = useLocalState('openday.editorDocked', false);
+  // The form always opens floating. The user can dock it; it undocks again when closed.
+  const [docked, setDocked] = useState(false);
   const [page, setPage] = useState('calendar');
 
   const [events, setEvents] = useState([]);
@@ -89,6 +90,11 @@ export default function App() {
   const [menu, setMenu] = useState(null); // { id, x, y }
   const [appearanceOpen, setAppearanceOpen] = useState(false);
   const [snack, setSnack] = useState(null);
+
+  const formOpen = draft !== null;
+  useEffect(() => {
+    if (!formOpen) setDocked(false);
+  }, [formOpen]);
 
   const showError = useCallback((err) => setSnack({ text: err.message || String(err) }), []);
 

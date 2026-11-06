@@ -57,7 +57,8 @@ How the app works:
 - API lives under `/api` (`backend/api.go`): `GET/POST /api/events`, `PUT/DELETE /api/events/{id}`, `GET/PUT /api/settings`, `GET /api/health`.
 - Events are stored as UTC Unix milliseconds. The frontend shows them in the time zone from settings.
 - Settings (date format, time format, time zone, default duration, theme) are stored in the database, so they follow the user across browsers.
-- Small per-browser preferences (current view, sidebar open, editor docked) are kept in `localStorage`.
+- Small per-browser preferences (current view, sidebar open) are kept in `localStorage`.
+- The event form always opens floating. The user can dock it; it is never docked by default.
 - Environment variables: `OPENDAY_ADDR` (default `:8080`), `OPENDAY_DB` (default `openday.db`; `/data/openday.db` in Docker).
 
 ## Folder layout
