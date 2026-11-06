@@ -38,7 +38,9 @@ One repository, two main folders:
 openday/
 ├── backend/     # Go code (API + serves the embedded frontend)
 ├── frontend/    # React app (Vite)
+├── assets/      # project images (e.g. logo.svg, used in README)
 ├── Dockerfile   # builds frontend, then backend, into one image
+├── README.md
 ├── AGENTS.md
 └── CLAUDE.md
 ```
