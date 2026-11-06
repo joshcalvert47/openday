@@ -73,6 +73,7 @@ export default function DropdownList({ id, anchorRef, options, activeIndex, sele
           className={`dd-item ${i === activeIndex ? 'active' : ''} ${o.value === selectedValue ? 'selected' : ''}`}
           onClick={() => onPick(o.value)}
         >
+          {o.color && <span className="dd-dot" style={{ background: o.color }} />}
           {o.label}
         </li>
       ))}

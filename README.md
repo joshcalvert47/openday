@@ -54,9 +54,11 @@ Your data stays in the volume.
 - Drag events to move them. Drag the bottom edge to resize.
 - Events have a title, description and color. Events can overlap.
 - Right-click an event to change its color or delete it.
+- Several calendars (for example "Work" and "Family"), each with its own name and color. Tick them in the sidebar to show or hide their events. Create, rename, recolor and delete calendars in Settings.
 - The event form can float or be docked to the side. On phones it slides up from the bottom.
 - Notifications: each event can have up to 5 reminders ("30 minutes before"). Set any number of minutes, hours, days or weeks (up to 4 weeks). Shown as desktop notifications (with Snooze) or as alerts in the page, with an optional sound. The calendar must be open in a browser tab.
 - Settings: date format, time format, time zone, default event length, default notification, notification settings.
+- Several time zones: add up to 5 other time zones in Settings. They show as extra hour columns in the day and week views, and you can set an event's time zone to any of them.
 - Light, dark or device theme.
 - Works on phones: tap to add or open, hold an event to drag it or open its menu, swipe to change the day/week/month.
 - Keyboard shortcuts: `D` `W` `M` `Y` (views), `T` (today), `J`/`K` (next/previous), `C` (create).

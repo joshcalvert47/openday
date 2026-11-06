@@ -13,7 +13,7 @@ export function describeWhen(event, tz, settings) {
   return `${date(ws)}, ${T.formatTime(ws, settings.timeFormat)} – ${date(we)}, ${T.formatTime(we, settings.timeFormat)}`;
 }
 
-export default function EventDetails({ event, tz, settings, anchor, closing, onClose, onEdit, onDelete }) {
+export default function EventDetails({ event, calendar, tz, settings, anchor, closing, onClose, onEdit, onDelete }) {
   return (
     <Popover anchor={anchor} onClose={onClose} closing={closing} className="details" label="Event details">
       <div className="details-bar" data-drag-handle>
@@ -28,10 +28,16 @@ export default function EventDetails({ event, tz, settings, anchor, closing, onC
         </button>
       </div>
       <div className="details-row">
-        <span className="details-color" style={{ background: colorOf(event) }} />
+        <span className="details-color" style={{ background: colorOf(event, calendar) }} />
         <div>
           <div className="details-title">{event.title || '(No title)'}</div>
           <div className="details-when">{describeWhen(event, tz, settings)}</div>
+          {/* Set in another time zone: also show the time there. */}
+          {event.timeZone && event.timeZone !== tz && (
+            <div className="details-when">
+              {describeWhen(event, event.timeZone, settings)} ({T.zoneCity(event.timeZone)})
+            </div>
+          )}
         </div>
       </div>
       {event.description && (
@@ -48,6 +54,12 @@ export default function EventDetails({ event, tz, settings, anchor, closing, onC
               <div key={m}>{T.formatReminder(m)}</div>
             ))}
           </div>
+        </div>
+      )}
+      {calendar && (
+        <div className="details-row">
+          <Icon name="calendar" size={20} className="row-icon" />
+          <div className="details-desc">{calendar.name}</div>
         </div>
       )}
     </Popover>

@@ -1,11 +1,13 @@
 import Icon from '../icons.jsx';
 import MiniMonth from './MiniMonth.jsx';
+import CalendarList from './CalendarList.jsx';
 import * as T from '../time.js';
 import { withKey } from '../shortcuts.js';
 
 // `phase` comes from useExit (motion.js): 'enter' and 'exit' play the
 // opening and closing animations.
-export default function Sidebar({ cursor, today, phase, onCreate, onPick, onOpenSettings, shortcuts }) {
+// `calendarList`: props for the "My calendars" list (see CalendarList).
+export default function Sidebar({ cursor, today, phase, onCreate, onPick, onOpenSettings, shortcuts, calendarList }) {
   const closing = phase === 'exit';
   return (
     <aside className={`sidebar ${phase === 'enter' ? 'entering' : ''} ${closing ? 'closing' : ''}`} inert={closing || undefined}>
@@ -14,6 +16,7 @@ export default function Sidebar({ cursor, today, phase, onCreate, onPick, onOpen
         <span>Create</span>
       </button>
       <MiniMonth value={T.startOfDay(cursor)} today={today} onPick={onPick} />
+      <CalendarList {...calendarList} />
       {/* Phones only (the header has the settings button on bigger screens). */}
       <button className="sidebar-settings" onClick={onOpenSettings}>
         <Icon name="settings" size={22} />

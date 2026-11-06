@@ -20,6 +20,8 @@ const fromWire = (e) => ({
   reminders: e.reminders || [],
 });
 const toWire = (e) => ({
+  calendarId: e.calendarId || 0,
+  timeZone: e.timeZone || '',
   title: e.title,
   description: e.description,
   color: e.color,
@@ -39,6 +41,11 @@ export const api = {
   createEvent: async (e) => fromWire(await request('POST', '/api/events', toWire(e))),
   updateEvent: async (e) => fromWire(await request('PUT', `/api/events/${e.id}`, toWire(e))),
   deleteEvent: (id) => request('DELETE', `/api/events/${id}`),
+  listCalendars: () => request('GET', '/api/calendars'),
+  createCalendar: (c) => request('POST', '/api/calendars', c),
+  // Only the fields in `patch` are changed.
+  updateCalendar: (id, patch) => request('PUT', `/api/calendars/${id}`, patch),
+  deleteCalendar: (id) => request('DELETE', `/api/calendars/${id}`),
   getSettings: () => request('GET', '/api/settings'),
   updateSettings: (patch) => request('PUT', '/api/settings', patch),
 };

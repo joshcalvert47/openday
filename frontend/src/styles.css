@@ -1210,19 +1210,6 @@ kbd {
   display: flex;
   flex-direction: column;
 }
-.settings-nav-item {
-  height: 40px;
-  line-height: 40px;
-  padding-left: 24px;
-  margin-right: 16px;
-  border-radius: 0 20px 20px 0;
-  color: var(--text);
-  text-decoration: none;
-  font-weight: 500;
-}
-.settings-nav-item:hover {
-  background: var(--hover);
-}
 .settings-content {
   flex: 1;
   overflow-y: auto;
@@ -1674,6 +1661,319 @@ body {
   body:has(.popover.sheet) .snackbar {
     top: 64px;
     bottom: auto;
+  }
+}
+
+/* ---------- Other time zones ---------- */
+
+/* Extra hour columns in the day/week grid, left of the primary one. */
+.tg-gutter-head.extra,
+.tg-gutter.extra {
+  width: 56px;
+}
+.tg-gutter-head.extra {
+  padding-right: 6px;
+}
+.tg-gutter.extra .tg-hour {
+  right: 6px;
+}
+.other-zones {
+  gap: 8px;
+}
+.other-zone {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.other-zone .search-select {
+  flex: 1;
+  min-width: 0;
+}
+.other-zone-now {
+  flex: none;
+  min-width: 64px;
+  font-size: 12px;
+  color: var(--text-3);
+}
+.zone-note {
+  margin: 4px 0 0;
+}
+.other-zones .settings-note {
+  margin: 0;
+}
+
+/* ---------- Calendars (sidebar list, settings) ---------- */
+
+.cal-section {
+  align-self: stretch;
+  margin-top: 8px;
+}
+.cal-section-head {
+  display: flex;
+  align-items: center;
+  padding-right: 4px;
+}
+.cal-section-toggle {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 40px;
+  padding: 0 8px 0 16px;
+  border: none;
+  border-radius: 20px;
+  background: transparent;
+  color: var(--text);
+  font-weight: 500;
+  text-align: left;
+}
+.cal-section-toggle:hover {
+  background: var(--hover);
+}
+.cal-section-toggle svg {
+  color: var(--text-2);
+}
+.cal-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cal-item {
+  display: flex;
+  align-items: center;
+  height: 36px;
+  padding-right: 4px;
+  border-radius: 18px;
+}
+.cal-item:hover,
+.cal-item:has(:focus-visible) {
+  background: var(--hover);
+}
+.cal-check {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: 100%;
+  padding-left: 16px;
+  cursor: pointer;
+}
+/* Checkbox in the calendar's color. */
+.cal-check input {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: none;
+  display: grid;
+  place-content: center;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  border: 2px solid var(--cal);
+  border-radius: 3px;
+  background: transparent;
+  cursor: pointer;
+}
+.cal-check input:checked {
+  background: var(--cal);
+}
+.cal-check input:checked::after {
+  content: '';
+  width: 4px;
+  height: 9px;
+  margin-top: -2px;
+  border: solid var(--cal-on);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+.cal-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* The options button shows when the row is hovered or focused. */
+.cal-more {
+  visibility: hidden;
+}
+.cal-item:hover .cal-more,
+.cal-item:has(:focus-visible) .cal-more {
+  visibility: visible;
+}
+.cal-dot,
+.dd-dot {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+.dd-item .dd-dot {
+  margin-right: 12px;
+}
+.editor-calendar {
+  min-width: 0;
+  max-width: 100%;
+}
+.editor-calendar .select-btn {
+  height: 32px;
+  border: none;
+  background: transparent;
+  padding: 0 4px 0 8px;
+}
+.editor-calendar .select-btn:hover,
+.editor-calendar .select-btn.open {
+  background: var(--hover);
+}
+.swatch-calendar {
+  margin-right: 8px;
+}
+.colors-sm .swatch-calendar {
+  margin-right: 8px;
+}
+
+/* Settings menu: groups ("General", "Add calendar", ...) with items under a thin line. */
+.settings-nav {
+  overflow-y: auto;
+}
+.settings-nav-head {
+  display: flex;
+  align-items: center;
+  height: 40px;
+  margin-right: 16px;
+  padding-right: 8px;
+  border-radius: 0 20px 20px 0;
+}
+.settings-nav-head:hover {
+  background: var(--hover);
+}
+.settings-nav-head.active {
+  background: var(--primary-soft);
+  color: var(--on-primary-soft);
+}
+.settings-nav-head.active .icon-btn {
+  color: inherit;
+}
+.settings-nav-title {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0 0 0 24px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-weight: 500;
+  text-align: left;
+}
+/* Opens and closes by animating its height (0fr to 1fr). */
+.settings-nav-sub {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows 200ms ease, opacity 150ms ease;
+}
+.settings-nav-sub.open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+.settings-nav-sub-inner {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  margin-left: 32px;
+  /* The thin line on the left; the marked item's bar covers it. */
+  box-shadow: inset 1px 0 var(--line);
+  transition: margin 200ms ease;
+}
+.settings-nav-sub.open .settings-nav-sub-inner {
+  margin-top: 4px;
+  margin-bottom: 8px;
+}
+.settings-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 40px;
+  margin: 0 16px 0 0;
+  padding: 6px 8px 6px 22px;
+  border: none;
+  border-left: 2px solid transparent;
+  border-radius: 0 20px 20px 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+.settings-nav-item:hover {
+  background: var(--hover);
+}
+.settings-nav-item.active {
+  border-left-color: var(--primary);
+  color: var(--primary);
+  font-weight: 500;
+}
+.cal-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.cal-heading .cal-dot {
+  width: 16px;
+  height: 16px;
+}
+.text-field {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
+  resize: vertical;
+}
+.text-field:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: inset 0 0 0 1px var(--primary);
+}
+.filled-btn:disabled {
+  opacity: 0.5;
+  box-shadow: none;
+  cursor: default;
+}
+.outline-btn.danger {
+  color: var(--danger);
+}
+.modal-text {
+  margin: 0;
+  color: var(--text-2);
+}
+
+@media (max-width: 900px) {
+  .settings .brand {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .settings .header-left {
+    min-width: 0;
+  }
+}
+
+@media (hover: none) {
+  .settings-nav-head:hover {
+    background: transparent;
+  }
+  .settings-nav-head.active:hover {
+    background: var(--primary-soft);
+  }
+  .cal-section-toggle:hover,
+  .cal-item:hover {
+    background: transparent;
+  }
+  /* No hover on touch screens: always show the options button. */
+  .cal-more {
+    visibility: visible;
   }
 }
 
