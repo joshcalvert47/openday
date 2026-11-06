@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
+import { useMedia, PHONE } from '../useMedia.js';
 
 // A floating card placed next to an anchor rectangle ({ left, right, top }).
 // Without an anchor it is centered on the screen.
@@ -9,10 +10,17 @@ import { useEffect, useLayoutEffect, useRef } from 'react';
 export default function Popover({ anchor, onClose, className = '', children, label, modal = false }) {
   const ref = useRef(null);
   const dragged = useRef(null); // { left, top } after the user moved the card
+  // Phones: the card is a sheet stuck to the bottom of the screen (CSS places it).
+  const sheet = useMedia(PHONE);
 
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
+    if (sheet) {
+      el.style.left = '';
+      el.style.top = '';
+      return;
+    }
     if (dragged.current) {
       place(el, dragged.current.left, dragged.current.top);
       return;
@@ -23,11 +31,7 @@ export default function Popover({ anchor, onClose, className = '', children, lab
     const vh = window.innerHeight;
     let left;
     let top;
-    if (vw <= 600) {
-      // Phone: centered, near the top, so the on-screen keyboard does not cover it.
-      left = (vw - w) / 2;
-      top = 8;
-    } else if (!anchor) {
+    if (!anchor) {
       left = (vw - w) / 2;
       top = (vh - h) / 2;
     } else {
@@ -40,7 +44,7 @@ export default function Popover({ anchor, onClose, className = '', children, lab
   });
 
   const onPointerDown = (e) => {
-    if (e.button !== 0 || !e.target.closest('[data-drag-handle]')) return;
+    if (sheet || e.button !== 0 || !e.target.closest('[data-drag-handle]')) return;
     if (e.target.closest('button, input, select, textarea, a')) return;
     e.preventDefault();
     const el = ref.current;
@@ -77,7 +81,7 @@ export default function Popover({ anchor, onClose, className = '', children, lab
   }, [onClose, modal]);
 
   return (
-    <div ref={ref} className={`popover ${className}`} role="dialog" aria-label={label} data-popover onPointerDown={onPointerDown}>
+    <div ref={ref} className={`popover ${sheet ? 'sheet' : ''} ${className}`} role="dialog" aria-label={label} data-popover onPointerDown={onPointerDown}>
       {children}
     </div>
   );

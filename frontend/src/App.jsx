@@ -13,6 +13,7 @@ import ContextMenu from './components/ContextMenu.jsx';
 import SettingsPage from './components/SettingsPage.jsx';
 import AppearanceDialog from './components/AppearanceDialog.jsx';
 import Snackbar from './components/Snackbar.jsx';
+import { useMedia, NARROW, PHONE } from './useMedia.js';
 
 const DEFAULT_SETTINGS = {
   dateFormat: 'MDY',
@@ -42,20 +43,6 @@ function useLocalState(key, initial) {
     }
   }, [key, value]);
   return [value, setValue];
-}
-
-// True on phone-sized screens (same breakpoint as the CSS).
-function useNarrow() {
-  const query = '(max-width: 900px)';
-  const [narrow, setNarrow] = useState(() => window.matchMedia?.(query).matches ?? false);
-  useEffect(() => {
-    const mq = window.matchMedia?.(query);
-    if (!mq) return undefined;
-    const onChange = (e) => setNarrow(e.matches);
-    mq.addEventListener('change', onChange);
-    return () => mq.removeEventListener('change', onChange);
-  }, []);
-  return narrow;
 }
 
 function useResolvedTheme(theme) {
@@ -92,7 +79,8 @@ export default function App() {
   const [view, setViewRaw] = useLocalState('openday.view', 'week');
   const setView = (v) => VIEWS.includes(v) && setViewRaw(v);
   const [cursor, setCursor] = useState(() => T.startOfDay(T.toWall(Date.now(), T.browserTimeZone())));
-  const narrow = useNarrow();
+  const narrow = useMedia(NARROW);
+  const phone = useMedia(PHONE);
   // On wide screens the sidebar choice is remembered. On phones the sidebar
   // floats over the calendar, so it always starts closed.
   const [wideSidebar, setWideSidebar] = useLocalState('openday.sidebarOpen', true);
@@ -103,7 +91,9 @@ export default function App() {
     if (!narrow) setPhoneSidebar(false);
   }, [narrow]);
   // The form always opens floating. The user can dock it; it undocks again when closed.
-  const [docked, setDocked] = useState(false);
+  const [dockedChoice, setDocked] = useState(false);
+  // Phones have no docking: the form is a sheet stuck to the bottom.
+  const docked = dockedChoice && !phone;
   const [page, setPage] = useState('calendar');
 
   const [events, setEvents] = useState([]);
@@ -452,7 +442,7 @@ export default function App() {
       onSave={saveDraft}
       onClose={() => setDraft(null)}
       onDelete={draft.id ? () => deleteEvent(draft.id) : null}
-      onToggleDock={() => setDocked(!docked)}
+      onToggleDock={phone ? null : () => setDocked(!docked)}
     />
   );
 

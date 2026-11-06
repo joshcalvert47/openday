@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import * as T from '../time.js';
 import { colorOf, DEFAULT_COLOR, textOn } from '../colors.js';
+import { PHONE } from '../useMedia.js';
 
 // Day and week views: one column per day, 24 hour rows.
 
@@ -139,6 +140,14 @@ export default function TimeGrid({
         top: r.top + T.minutesOfDay(ws) * PX_PER_MIN,
       };
       p.onCreate(ws, we, anchor);
+      // Phones: the form is a sheet at the bottom. Scroll so the new event
+      // sits near the top, where the sheet does not cover it.
+      if (window.matchMedia?.(PHONE).matches) {
+        // Wait one frame so the sheet (and the extra scroll room) is on screen.
+        requestAnimationFrame(() =>
+          scrollRef.current?.scrollTo({ top: Math.max(0, T.minutesOfDay(ws) * PX_PER_MIN - 24), behavior: 'smooth' }),
+        );
+      }
     } else if (!d.moved) {
       // Touch: a long press without moving opens the event menu.
       if (d.touch) p.onEventContext(d.ev, d.x, d.y);

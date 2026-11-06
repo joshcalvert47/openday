@@ -54,7 +54,7 @@ Your data stays in the volume.
 - Drag events to move them. Drag the bottom edge to resize.
 - Events have a title, description and color. Events can overlap.
 - Right-click an event to change its color or delete it.
-- The event form can float or be docked to the side.
+- The event form can float or be docked to the side. On phones it slides up from the bottom.
 - Settings: date format, time format, time zone, default event length.
 - Light, dark or device theme.
 - Works on phones: tap to add or open, hold an event to drag it or open its menu, swipe to change the day/week/month.

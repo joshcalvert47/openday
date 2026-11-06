@@ -1366,10 +1366,35 @@ body {
     grid-template-columns: repeat(auto-fill, minmax(min(232px, 100%), 1fr));
   }
 
-  /* Floating cards use the full width. */
-  .editor-popover,
-  .details {
-    width: calc(100vw - 16px);
+  /* Event cards are sheets stuck to the bottom of the screen. */
+  .popover.sheet {
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    max-width: none;
+    max-height: 85dvh;
+    overflow-y: auto;
+    border-radius: 28px 28px 0 0;
+    padding-bottom: env(safe-area-inset-bottom);
+    animation: sheet-in 0.18s ease-out;
+  }
+  .popover.sheet [data-drag-handle] {
+    cursor: default;
+  }
+  /* Small grab bar at the top of the sheet, like native bottom sheets. */
+  .popover.sheet::before {
+    content: '';
+    display: block;
+    width: 32px;
+    height: 4px;
+    margin: 8px auto 0;
+    border-radius: 2px;
+    background: var(--line-strong);
+  }
+  .popover.sheet .editor-bar {
+    background: transparent;
+    border-radius: 0;
   }
   .editor-body {
     padding: 8px 16px;
@@ -1389,5 +1414,26 @@ body {
     right: 8px;
     bottom: 8px;
     min-width: 0;
+  }
+}
+
+@keyframes sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+
+/* Phones: keep messages clear of the bottom sheet. */
+@media (max-width: 600px) {
+  /* Room to scroll late events above the sheet. */
+  body:has(.popover.sheet) .tg-body {
+    margin-bottom: 70dvh;
+  }
+  body:has(.popover.sheet) .snackbar {
+    top: 64px;
+    bottom: auto;
   }
 }
