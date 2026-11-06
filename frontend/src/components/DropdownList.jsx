@@ -10,39 +10,40 @@ export default function DropdownList({ id, anchorRef, options, activeIndex, sele
   const ref = useRef(null);
   const [pos, setPos] = useState(null);
 
+  // Follow the anchor every frame while open, so the list moves with the
+  // field when the form is dragged, docked, scrolled or the window resizes.
   useLayoutEffect(() => {
+    let last = '';
+    let frame = 0;
     const update = () => {
       const a = anchorRef.current;
-      if (!a) return;
-      const r = a.getBoundingClientRect();
-      const vv = window.visualViewport;
-      const vh = vv ? vv.height + vv.offsetTop : window.innerHeight;
-      const below = vh - r.bottom - 8;
-      const above = r.top - 8;
-      const up = below < 200 && above > below;
-      const maxHeight = Math.max(80, Math.min(256, up ? above : below));
-      setPos({
-        left: Math.max(8, Math.min(r.left, window.innerWidth - 8 - Math.max(r.width, 120))),
-        minWidth: r.width,
-        maxHeight,
-        top: up ? undefined : r.bottom + 4,
-        bottom: up ? window.innerHeight - r.top + 4 : undefined,
-      });
+      if (a) {
+        const r = a.getBoundingClientRect();
+        const vv = window.visualViewport;
+        const vh = vv ? vv.height + vv.offsetTop : window.innerHeight;
+        const vw = window.innerWidth;
+        const key = `${r.left},${r.top},${r.width},${r.height},${vw},${vh}`;
+        if (key !== last) {
+          last = key;
+          const below = vh - r.bottom - 8;
+          const above = r.top - 8;
+          const up = below < 200 && above > below;
+          setPos({
+            left: Math.max(8, Math.min(r.left, vw - 8 - Math.max(r.width, 120))),
+            minWidth: r.width,
+            maxHeight: Math.max(80, Math.min(256, up ? above : below)),
+            top: up ? undefined : r.bottom + 4,
+            bottom: up ? window.innerHeight - r.top + 4 : undefined,
+          });
+        }
+      }
+      frame = requestAnimationFrame(update);
     };
     update();
-    const onScroll = (e) => {
-      if (ref.current?.contains(e.target)) return;
-      update();
-    };
-    window.addEventListener('scroll', onScroll, true);
-    window.addEventListener('resize', update);
-    window.visualViewport?.addEventListener('resize', update);
-    return () => {
-      window.removeEventListener('scroll', onScroll, true);
-      window.removeEventListener('resize', update);
-      window.visualViewport?.removeEventListener('resize', update);
-    };
+    return () => cancelAnimationFrame(frame);
   }, [anchorRef]);
+
+  const placed = pos !== null;
 
   // Keep the active option in view (centered), without scrolling the page.
   useEffect(() => {
@@ -50,7 +51,7 @@ export default function DropdownList({ id, anchorRef, options, activeIndex, sele
     const item = list?.children[activeIndex];
     if (!item) return;
     list.scrollTop = item.offsetTop - list.clientHeight / 2 + item.offsetHeight / 2;
-  }, [activeIndex, pos]);
+  }, [activeIndex, placed]);
 
   return createPortal(
     <ul
