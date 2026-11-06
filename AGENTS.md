@@ -15,10 +15,24 @@ When making product or UI decisions, the default answer is: **do what Google Cal
 
 The project is at the very start. There is no code yet.
 
-- Tech stack: **not decided yet.**
 - Build, test and lint commands: **none yet.**
 
-Do not assume a stack. If a task needs one, ask first (see "How to ask" below). Update this file once decisions are made.
+## Tech stack
+
+| Part | Choice |
+| --- | --- |
+| Backend | Go |
+| Frontend | React |
+| Database | SQLite |
+| Shipping | One Docker image (backend serves the built frontend) |
+
+Why: easy to self-host. One container, one database file, low memory use.
+
+Rules:
+
+- Keep it to **one Docker image**. Do not add services that need their own container (e.g. Postgres, Redis).
+- The SQLite database file must live in a mounted volume, so data survives container updates.
+- Anything not listed here (libraries, frameworks, folder layout, tools) is **not decided yet**. Ask before picking (see "How to ask" below), then add the decision here.
 
 ## How to talk
 
