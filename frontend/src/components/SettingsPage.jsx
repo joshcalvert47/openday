@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import Icon from '../icons.jsx';
 import Select from './Select.jsx';
+import SearchSelect from './SearchSelect.jsx';
 import { ThemeOptions } from './AppearanceDialog.jsx';
 import * as T from '../time.js';
 
@@ -62,7 +63,7 @@ export default function SettingsPage({ settings, onChange, onBack }) {
 
             <h3>Time zone</h3>
             <Field label="Primary time zone">
-              <Select value={settings.timeZone} onChange={(timeZone) => onChange({ timeZone })} options={zoneOptions} />
+              <SearchSelect value={settings.timeZone} onChange={(timeZone) => onChange({ timeZone })} options={zoneOptions} />
             </Field>
 
             <h3>Event settings</h3>

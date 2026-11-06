@@ -1140,6 +1140,23 @@ button {
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+.search-select {
+  cursor: text;
+}
+.search-select:focus-within {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+.search-select input {
+  height: 100%;
+  padding: 0;
+  border: none;
+  background: transparent;
+  outline: none;
+}
+.search-select .select-caret {
+  cursor: pointer;
+}
 .select-caret {
   flex: none;
   color: var(--text-2);

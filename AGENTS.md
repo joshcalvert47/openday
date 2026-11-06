@@ -58,7 +58,7 @@ How the app works:
 - Events are stored as UTC Unix milliseconds. The frontend shows them in the time zone from settings.
 - Settings (date format, time format, time zone, default duration, theme) are stored in the database, so they follow the user across browsers.
 - Small per-browser preferences (current view, sidebar open) are kept in `localStorage`.
-- Drop-downs: no browser `<select>`. Use `Select.jsx` (styled list, keyboard and type-ahead). Lists are drawn by `DropdownList.jsx` in `document.body`.
+- Drop-downs: no browser `<select>`. Use `Select.jsx` (styled list, keyboard and type-ahead). Long lists (time zones) use `SearchSelect.jsx`: type to search, the list scrolls to the best match in real time (nothing is hidden). Lists are drawn by `DropdownList.jsx` in `document.body` and follow their field (e.g. when the form is dragged).
 - Event times use `TimeInput.jsx`: pick from the list or type any time ("9", "930", "9:30pm", "21:15"). While typing, the list scrolls to the closest option. Typed text is read by `parseTime` in `time.js`. In 12h format, a time without am/pm picks the one closest to the current start (start field) or the first one after the start (end field).
 - The event form always opens floating. The user can dock it; it is never docked by default.
 - Phones and touch (breakpoints: 900px and 600px in `styles.css`):
