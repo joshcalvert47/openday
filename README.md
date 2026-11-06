@@ -57,6 +57,7 @@ Your data stays in the volume.
 - The event form can float or be docked to the side.
 - Settings: date format, time format, time zone, default event length.
 - Light, dark or device theme.
+- Works on phones: tap to add or open, hold an event to drag it or open its menu, swipe to change the day/week/month.
 - Keyboard shortcuts: `D` `W` `M` `Y` (views), `T` (today), `J`/`K` (next/previous), `C` (create).
 
 ## For developers

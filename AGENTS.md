@@ -59,6 +59,11 @@ How the app works:
 - Settings (date format, time format, time zone, default duration, theme) are stored in the database, so they follow the user across browsers.
 - Small per-browser preferences (current view, sidebar open) are kept in `localStorage`.
 - The event form always opens floating. The user can dock it; it is never docked by default.
+- Phones and touch (breakpoints: 900px and 600px in `styles.css`):
+  - Sidebar floats over the calendar and starts closed.
+  - Tap = click. Long press on an event = drag it, or open its menu if the finger does not move. Swipe left/right = next/previous period.
+  - After a finger tap opens a card, the "ghost" click from the browser is cancelled (see `eatGhostClick` in `TimeGrid.jsx`).
+  - Test with Playwright device emulation (e.g. `devices['Pixel 7']`) and touch events.
 - Environment variables: `OPENDAY_ADDR` (default `:8080`), `OPENDAY_DB` (default `openday.db`; `/data/openday.db` in Docker).
 
 ## Folder layout

@@ -13,6 +13,34 @@ export default function MonthView({
   const month = T.ymd(cursor)[1];
   const gridRef = useRef(null);
   const createOk = useRef(false);
+  const press = useRef(null); // touch long-press on an event chip
+
+  // Touch: hold an event to open its menu (phones have no right click).
+  const onChipPointerDown = (e, ev) => {
+    press.current = { pointerType: e.pointerType, fired: false };
+    if (e.pointerType !== 'touch' || ev.isDraft) return;
+    const x = e.clientX;
+    const y = e.clientY;
+    const state = press.current;
+    const cleanup = () => {
+      clearTimeout(state.timer);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', cleanup);
+      window.removeEventListener('pointercancel', cleanup);
+    };
+    const onMove = (m) => {
+      if (Math.abs(m.clientX - x) > 8 || Math.abs(m.clientY - y) > 8) cleanup();
+    };
+    state.timer = setTimeout(() => {
+      cleanup();
+      state.fired = true;
+      navigator.vibrate?.(15);
+      onEventContext(ev, x, y);
+    }, 450);
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', cleanup);
+    window.addEventListener('pointercancel', cleanup);
+  };
   const [maxItems, setMaxItems] = useState(3);
 
   // How many events fit in a cell depends on the window height.
@@ -73,9 +101,14 @@ export default function MonthView({
                       key={ev.id}
                       className={`mv-ev ${ev.isDraft ? 'draft' : ''} ${ev.we <= today && !ev.isDraft ? 'past' : ''}`}
                       style={ev.isDraft ? { background: color, color: textOn(color) } : undefined}
-                      onClick={(e) => onEventClick(ev, rectOf(e.currentTarget))}
+                      onPointerDown={(e) => onChipPointerDown(e, ev)}
+                      onClick={(e) => {
+                        if (press.current?.fired) return; // the long press already opened the menu
+                        onEventClick(ev, rectOf(e.currentTarget));
+                      }}
                       onContextMenu={(e) => {
                         e.preventDefault();
+                        if (press.current?.pointerType === 'touch') return;
                         onEventContext(ev, e.clientX, e.clientY);
                       }}
                     >
@@ -87,7 +120,8 @@ export default function MonthView({
                 })}
                 {overflow && (
                   <button className="mv-more" onClick={() => onDayClick(day)}>
-                    {list.length - visible.length} more
+                    <span className="mv-more-long">{list.length - visible.length} more</span>
+                    <span className="mv-more-short">+{list.length - visible.length}</span>
                   </button>
                 )}
               </div>

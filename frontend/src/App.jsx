@@ -44,6 +44,20 @@ function useLocalState(key, initial) {
   return [value, setValue];
 }
 
+// True on phone-sized screens (same breakpoint as the CSS).
+function useNarrow() {
+  const query = '(max-width: 900px)';
+  const [narrow, setNarrow] = useState(() => window.matchMedia?.(query).matches ?? false);
+  useEffect(() => {
+    const mq = window.matchMedia?.(query);
+    if (!mq) return undefined;
+    const onChange = (e) => setNarrow(e.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+  return narrow;
+}
+
 function useResolvedTheme(theme) {
   const [systemDark, setSystemDark] = useState(
     () => window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false,
@@ -78,7 +92,16 @@ export default function App() {
   const [view, setViewRaw] = useLocalState('openday.view', 'week');
   const setView = (v) => VIEWS.includes(v) && setViewRaw(v);
   const [cursor, setCursor] = useState(() => T.startOfDay(T.toWall(Date.now(), T.browserTimeZone())));
-  const [sidebarOpen, setSidebarOpen] = useLocalState('openday.sidebarOpen', true);
+  const narrow = useNarrow();
+  // On wide screens the sidebar choice is remembered. On phones the sidebar
+  // floats over the calendar, so it always starts closed.
+  const [wideSidebar, setWideSidebar] = useLocalState('openday.sidebarOpen', true);
+  const [phoneSidebar, setPhoneSidebar] = useState(false);
+  const sidebarOpen = narrow ? phoneSidebar : wideSidebar;
+  const setSidebarOpen = narrow ? setPhoneSidebar : setWideSidebar;
+  useEffect(() => {
+    if (!narrow) setPhoneSidebar(false);
+  }, [narrow]);
   // The form always opens floating. The user can dock it; it undocks again when closed.
   const [docked, setDocked] = useState(false);
   const [page, setPage] = useState('calendar');
@@ -212,7 +235,27 @@ export default function App() {
     setEditorAnchor(anchor || null);
   };
 
+  // Swipe left/right on the calendar to go to the next/previous period (phones).
+  const swipe = useRef(null);
+  const onTouchStart = (e) => {
+    const t = e.touches[0];
+    swipe.current =
+      e.touches.length === 1 && !e.target.closest('.ev, .mv-ev, [data-popover]')
+        ? { x: t.clientX, y: t.clientY, time: Date.now() }
+        : null;
+  };
+  const onTouchEnd = (e) => {
+    const s0 = swipe.current;
+    swipe.current = null;
+    if (!s0 || draft) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - s0.x;
+    const dy = t.clientY - s0.y;
+    if (Math.abs(dx) > 60 && Math.abs(dx) > 2 * Math.abs(dy) && Date.now() - s0.time < 700) go(dx < 0 ? 1 : -1);
+  };
+
   const createFromButton = () => {
+    if (narrow) setPhoneSidebar(false);
     const hour = new Date(nowWall).getUTCHours() + 1;
     const start = T.startOfDay(cursor) + Math.min(hour, 23) * T.HOUR;
     startDraft(start, start + settings.defaultDuration * T.MINUTE, null);
@@ -428,9 +471,24 @@ export default function App() {
         {docked && editor ? (
           <aside className="dock">{editor}</aside>
         ) : (
-          sidebarOpen && <Sidebar cursor={cursor} today={today} onCreate={createFromButton} onPick={setCursor} />
+          sidebarOpen && (
+            <>
+              {narrow && <div className="sidebar-backdrop" onClick={() => setPhoneSidebar(false)} />}
+              <Sidebar
+                cursor={cursor}
+                today={today}
+                onCreate={createFromButton}
+                onPick={(d) => {
+                  setCursor(d);
+                  if (narrow) setPhoneSidebar(false);
+                }}
+              />
+            </>
+          )
         )}
-        <main className="main">{main}</main>
+        <main className="main" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+          {main}
+        </main>
       </div>
 
       {!docked && editor}

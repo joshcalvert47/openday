@@ -8,6 +8,8 @@ const HOUR_PX = 48;
 const PX_PER_MIN = HOUR_PX / 60;
 const SNAP = 15; // minutes for drag and resize
 const CLICK_SNAP = 30; // minutes for a simple click
+const LONG_PRESS_MS = 450; // touch: hold this long to drag an event or open its menu
+const TOUCH_SLOP = 8; // touch: moving more than this (px) before the hold means "scroll"
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
@@ -68,7 +70,11 @@ export default function TimeGrid({
   const [drag, setDrag] = useState(null);
   const dragRef = useRef(null);
   const props = useRef(null);
-  props.current = { days, onCreate, onEventClick, onEventTimeChange, settings };
+  props.current = { days, onCreate, onEventClick, onEventContext, onEventTimeChange, onSurfacePointerDown, settings };
+  const lastPointer = useRef('mouse');
+  // After a finger tap opens a card, the browser sends a "ghost" click at the
+  // same spot. The card may now be there, so we cancel that click.
+  const eatGhostClick = useRef(false);
 
   // Scroll to a useful hour on first show.
   useLayoutEffect(() => {
@@ -111,7 +117,10 @@ export default function TimeGrid({
 
   const finish = (d, e) => {
     const p = props.current;
+    if (d.touch) eatGhostClick.current = true;
     if (d.type === 'create') {
+      // Touch: only a tap creates an event. Moving the finger means scrolling.
+      if (d.touch && (d.moved || !p.onSurfacePointerDown())) return;
       const day = p.days[d.dayIdx];
       let ws;
       let we;
@@ -131,7 +140,9 @@ export default function TimeGrid({
       };
       p.onCreate(ws, we, anchor);
     } else if (!d.moved) {
-      p.onEventClick(d.ev, { left: d.rect.left, right: d.rect.right, top: d.rect.top });
+      // Touch: a long press without moving opens the event menu.
+      if (d.touch) p.onEventContext(d.ev, d.x, d.y);
+      else p.onEventClick(d.ev, { left: d.rect.left, right: d.rect.right, top: d.rect.top });
     } else if (d.type === 'move') {
       if (d.ws !== d.ev.ws) p.onEventTimeChange(d.ev, d.ws, d.we);
     } else if (d.we !== d.ev.we) {
@@ -147,10 +158,14 @@ export default function TimeGrid({
       dragRef.current = update(dragRef.current, e);
       setDrag(dragRef.current);
     };
+    // While dragging an event with a finger, stop the page from scrolling.
+    const blockScroll = (e) => e.cancelable && e.preventDefault();
+    if (d.touch && d.type !== 'create') window.addEventListener('touchmove', blockScroll, { passive: false });
     const up = (e) => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
       window.removeEventListener('pointercancel', up);
+      window.removeEventListener('touchmove', blockScroll);
       const cur = dragRef.current;
       dragRef.current = null;
       setDrag(null);
@@ -166,27 +181,67 @@ export default function TimeGrid({
   }, []);
 
   const onColsPointerDown = (e) => {
+    lastPointer.current = e.pointerType;
     if (e.button !== 0 || e.target.closest('.ev')) return;
-    if (!onSurfacePointerDown()) return;
-    e.preventDefault();
+    const touch = e.pointerType === 'touch';
+    // Touch decides on finger up (it may be a scroll). Mouse decides now.
+    if (!touch) {
+      if (!onSurfacePointerDown()) return;
+      e.preventDefault();
+    }
     const { dayIdx, min } = locate(e.clientX, e.clientY);
     const startMin = Math.floor(min / SNAP) * SNAP;
-    begin({ type: 'create', dayIdx, rawMin: min, startMin, curMin: startMin, moved: false, x: e.clientX, y: e.clientY });
+    begin({ type: 'create', touch, dayIdx, rawMin: min, startMin, curMin: startMin, moved: false, x: e.clientX, y: e.clientY });
   };
 
   const onEventPointerDown = (e, ev, dayIdx) => {
+    lastPointer.current = e.pointerType;
     if (e.button !== 0) return;
     e.stopPropagation();
-    e.preventDefault();
-    if (!ev.isDraft) onInteract?.();
     const rect = e.currentTarget.getBoundingClientRect();
     const base = { ev, dayIdx, rect, moved: false, x: e.clientX, y: e.clientY, ws: ev.ws, we: ev.we };
-    if (e.target.closest('.ev-resize')) {
-      begin({ ...base, type: 'resize' });
-    } else {
-      const { min } = locate(e.clientX, e.clientY);
-      begin({ ...base, type: 'move', grab: days[dayIdx] + min * T.MINUTE - ev.ws });
+    const isResize = !!e.target.closest('.ev-resize');
+    const { min } = locate(e.clientX, e.clientY);
+    const drag = isResize
+      ? { ...base, type: 'resize' }
+      : { ...base, type: 'move', grab: days[dayIdx] + min * T.MINUTE - ev.ws };
+
+    if (e.pointerType !== 'touch') {
+      e.preventDefault();
+      if (!ev.isDraft) onInteract?.();
+      begin(drag);
+      return;
     }
+
+    // Touch: a tap opens the event, a long press starts a drag (or opens the
+    // menu if the finger does not move). Moving early means the user scrolls.
+    const pointerId = e.pointerId;
+    let timer = null;
+    const cleanup = () => {
+      clearTimeout(timer);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', cleanup);
+    };
+    const onMove = (m) => {
+      if (m.pointerId !== pointerId) return;
+      if (Math.abs(m.clientX - base.x) > TOUCH_SLOP || Math.abs(m.clientY - base.y) > TOUCH_SLOP) cleanup();
+    };
+    const onUp = (u) => {
+      if (u.pointerId !== pointerId) return;
+      cleanup();
+      eatGhostClick.current = true;
+      if (!ev.isDraft) props.current.onEventClick(ev, { left: rect.left, right: rect.right, top: rect.top });
+    };
+    timer = setTimeout(() => {
+      cleanup();
+      if (!ev.isDraft) onInteract?.();
+      navigator.vibrate?.(15);
+      begin({ ...drag, touch: true });
+    }, LONG_PRESS_MS);
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', cleanup);
   };
 
   // ---- Build the event blocks for each day ----
@@ -239,7 +294,14 @@ export default function TimeGrid({
         ))}
       </div>
 
-      <div className="tg-scroll" ref={scrollRef}>
+      <div
+        className="tg-scroll"
+        ref={scrollRef}
+        onTouchEnd={(e) => {
+          if (eatGhostClick.current && e.cancelable) e.preventDefault();
+          eatGhostClick.current = false;
+        }}
+        onContextMenu={(e) => lastPointer.current === 'touch' && e.preventDefault()}>
         <div className="tg-body" style={{ height: 24 * HOUR_PX }}>
           <div className="tg-gutter">
             {Array.from({ length: 23 }, (_, i) => (
@@ -276,6 +338,8 @@ export default function TimeGrid({
                         onPointerDown={(e) => onEventPointerDown(e, ev, dayIdx)}
                         onContextMenu={(e) => {
                           e.preventDefault();
+                          // Touch long press is handled in onEventPointerDown.
+                          if (lastPointer.current === 'touch') return;
                           onEventContext(ev, e.clientX, e.clientY);
                         }}
                         title={`${ev.title || '(No title)'}\n${T.formatTimeRange(ev.ws, ev.we, tf)}`}

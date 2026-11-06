@@ -1091,9 +1091,75 @@ select.field-btn option {
   background: var(--surface);
 }
 
-/* ---------- Small screens ---------- */
+/* ---------- Touch ---------- */
+
+body {
+  /* No double-tap zoom delay on phones. */
+  touch-action: manipulation;
+}
+.ev,
+.mv-ev {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.tg-scroll {
+  overscroll-behavior: contain;
+}
+.title-short,
+.mv-more-short {
+  display: none;
+}
+/* Phones have no hover: a tapped button must not stay highlighted. */
+@media (hover: none) {
+  .icon-btn:hover,
+  .outline-btn:hover,
+  .text-btn:hover,
+  .field-btn:hover,
+  .menu-item:not(.active):hover,
+  .mini-day:not(.today):not(.selected):hover,
+  .tg-day-head:not(.today) .tg-date:hover,
+  .mv-date:not(.today):hover,
+  .mv-ev:not(.draft):hover,
+  .mv-more:hover,
+  .settings-nav-item:hover {
+    background: transparent;
+  }
+  .create-btn:hover {
+    background: var(--create-bg);
+    box-shadow: var(--shadow-sm);
+  }
+  .icon-btn:active,
+  .outline-btn:active,
+  .text-btn:active,
+  .menu-item:active,
+  .mini-day:active,
+  .mv-ev:active {
+    background: var(--press);
+  }
+}
+@media (pointer: coarse) {
+  /* Bigger grab area for resizing with a finger. */
+  .ev-resize {
+    height: 14px;
+  }
+  /* Hover styles stick after a tap on phones; keep them subtle. */
+  .swatch:hover {
+    transform: none;
+  }
+}
+
+/* ---------- Small screens (tablets and phones) ---------- */
 
 @media (max-width: 900px) {
+  .app,
+  .settings {
+    height: 100dvh;
+  }
+  .header {
+    padding: 8px 8px 8px 4px;
+    gap: 4px;
+  }
   .header-left {
     min-width: 0;
   }
@@ -1101,38 +1167,187 @@ select.field-btn option {
   .logo {
     display: none;
   }
+  .settings .brand {
+    display: inline;
+  }
+  .sidebar-backdrop {
+    position: fixed;
+    inset: 64px 0 0 0;
+    z-index: 499;
+    background: rgba(0, 0, 0, 0.32);
+  }
   .sidebar {
     position: fixed;
     top: 64px;
     bottom: 0;
     left: 0;
     z-index: 500;
+    width: min(288px, 85vw);
     background: var(--bg);
     box-shadow: var(--shadow);
   }
   .dock {
     position: fixed;
-    inset: 64px auto 0 0;
-    width: min(380px, 100vw);
+    inset: 64px 0 0 0;
+    width: auto;
     z-index: 600;
     margin: 0;
+    border-radius: 16px 16px 0 0;
     box-shadow: var(--shadow);
   }
   .main {
     margin: 0 8px !important;
+    border-radius: 16px 16px 0 0;
   }
   .settings-nav {
     display: none;
   }
+  .settings-content {
+    padding: 8px 8px 48px;
+  }
+  .settings-content section {
+    padding: 16px;
+  }
 }
+
+/* ---------- Phones ---------- */
+
 @media (max-width: 600px) {
+  /* iOS zooms into inputs with text smaller than 16px. */
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+
+  .header {
+    height: 56px;
+  }
+  .sidebar,
+  .sidebar-backdrop,
+  .dock {
+    top: 56px;
+  }
+  .header-nav {
+    gap: 0;
+  }
   .header-nav .outline-btn {
-    margin-right: 0;
+    height: 34px;
+    padding: 0 12px;
+    margin-right: 2px;
+  }
+  .header-nav .icon-btn {
+    width: 32px;
+    height: 32px;
   }
   .header-title {
     font-size: 18px;
+    margin-left: 4px;
   }
-  .header-right .icon-btn {
+  .title-long {
     display: none;
+  }
+  .title-short {
+    display: inline;
+  }
+  .header-right {
+    gap: 0;
+  }
+  .view-btn {
+    height: 34px !important;
+    padding: 0 4px 0 12px !important;
+  }
+
+  /* Day / week grid */
+  .tg-gutter-head,
+  .tg-gutter {
+    width: 44px;
+  }
+  .tg-gutter-head {
+    padding-right: 4px;
+  }
+  .tg-tz {
+    font-size: 9px;
+  }
+  .tg-hour {
+    right: 4px;
+    font-size: 9px;
+  }
+  .tg-dow {
+    font-size: 10px;
+    letter-spacing: 0;
+  }
+  .tg-date {
+    width: 34px;
+    height: 34px;
+    font-size: 18px;
+  }
+  .tg-col-events {
+    right: 4px;
+  }
+  .ev {
+    padding: 1px 3px;
+    font-size: 11px;
+    line-height: 14px;
+    border-radius: 3px;
+  }
+
+  /* Month view: titles only, they are short on a phone. */
+  .mv-dow {
+    font-size: 10px;
+    letter-spacing: 0;
+  }
+  .mv-events {
+    padding: 2px 1px 0;
+  }
+  .mv-ev,
+  .mv-more {
+    height: 18px;
+    padding: 0 3px;
+    gap: 3px;
+    font-size: 11px;
+  }
+  .mv-ev-time,
+  .mv-more-long {
+    display: none;
+  }
+  .mv-more-short {
+    display: inline;
+  }
+  .mv-dot {
+    width: 6px;
+    height: 6px;
+  }
+
+  .yv {
+    padding: 8px;
+  }
+  .yv-grid {
+    grid-template-columns: repeat(auto-fill, minmax(min(232px, 100%), 1fr));
+  }
+
+  /* Floating cards use the full width. */
+  .editor-popover,
+  .details {
+    width: calc(100vw - 16px);
+  }
+  .editor-body {
+    padding: 8px 16px;
+  }
+  .editor-row {
+    gap: 12px;
+  }
+  .editor-foot {
+    padding: 8px 12px 12px 16px;
+  }
+  .details-row {
+    padding: 4px 8px 4px 12px;
+  }
+
+  .snackbar {
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    min-width: 0;
   }
 }

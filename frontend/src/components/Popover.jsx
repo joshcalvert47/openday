@@ -23,7 +23,11 @@ export default function Popover({ anchor, onClose, className = '', children, lab
     const vh = window.innerHeight;
     let left;
     let top;
-    if (!anchor) {
+    if (vw <= 600) {
+      // Phone: centered, near the top, so the on-screen keyboard does not cover it.
+      left = (vw - w) / 2;
+      top = 8;
+    } else if (!anchor) {
       left = (vw - w) / 2;
       top = (vh - h) / 2;
     } else {

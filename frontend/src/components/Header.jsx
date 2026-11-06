@@ -9,6 +9,9 @@ const VIEW_ITEMS = [
   { id: 'year', label: 'Year', key: 'Y' },
 ];
 
+// Shorter title for phones: "Nov 2026" instead of "November 2026".
+const shorten = (text) => text.replace(/\b(January|February|March|April|May|June|July|August|September|October|November|December)\b/g, (m) => m.slice(0, 3));
+
 function title(view, cursor) {
   const [y, m, d] = T.ymd(cursor);
   if (view === 'year') return `${y}`;
@@ -71,7 +74,10 @@ export default function Header({
         <button className="icon-btn" aria-label={`Next ${unit}`} title={`Next ${unit}`} onClick={onNext}>
           <Icon name="chevronRight" />
         </button>
-        <h1 className="header-title">{title(view, cursor)}</h1>
+        <h1 className="header-title">
+          <span className="title-long">{title(view, cursor)}</span>
+          <span className="title-short">{shorten(title(view, cursor))}</span>
+        </h1>
       </div>
       <div className="header-right">
         <button
