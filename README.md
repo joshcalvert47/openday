@@ -29,10 +29,7 @@
 </p>
 
 > [!WARNING]
-> **OpenDay is in early development.** Things may change between updates. Back up your data.
->
-> - **There is no login yet.** Anyone who can open the page can see and change your events. Run it only on your own computer or a private network.
-> - Not done yet: repeating events, guests and sharing, import/export, phone sync (CalDAV).
+> OpenDay is in early development. Many features are missing and things may change or break between updates.
 
 ## 📸 Screenshots
 
