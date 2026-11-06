@@ -1726,6 +1726,14 @@ body {
   }
 }
 
+/* Right-click menu on an event: grows out of the clicked point. */
+.ctx-menu {
+  animation: pop-in 0.12s ease-out;
+}
+.ctx-menu.closing {
+  animation: fade-out 0.1s ease-in forwards;
+}
+
 /* Dialogs (Appearance, reminder alerts). */
 .modal-backdrop {
   animation: fade-in 0.15s ease-out;

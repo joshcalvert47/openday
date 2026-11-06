@@ -69,7 +69,7 @@ How the app works:
   - Desktop notifications need HTTPS or `localhost` (browser rule). Headless Chromium always denies them, so tests stub `Notification.permission` and `showNotification`.
 - Small per-browser preferences (current view, sidebar open) are kept in `localStorage`.
 - Animations (CSS only, in the "Animations" section at the end of `styles.css`):
-  - Sidebar (grows/shrinks on wide screens, slides in on tablets and phones), event details card and floating event form (fade and grow), phone sheets (slide up and down), docking the form (the panel grows while the sidebar shrinks), dialogs, snackbar.
+  - Sidebar (grows/shrinks on wide screens, slides in on tablets and phones), event details card, floating event form and right-click menu (fade and grow), phone sheets (slide up and down), docking the form (the panel grows while the sidebar shrinks), dialogs, snackbar.
   - Closing animations: `useExit` in `frontend/src/motion.js` keeps a closing element on the page (class `closing`) until its animation ends. Its `key` is used as a React key with a prefix (`details-3`), so siblings never share a key.
   - The "Show animations" setting (Settings → Appearance, stored as `animations`) sets `data-motion` on `<html>`. Off, or the device asks for reduced motion (`prefers-reduced-motion`): no animations at all.
   - Keep animations short (about 150 to 200 ms). `EXIT_MS` in `motion.js` must be at least the longest closing animation.

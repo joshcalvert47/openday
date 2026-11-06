@@ -428,6 +428,8 @@ export default function App() {
   const detailsEvent = details && events.find((e) => e.id === details.id);
   const detailsExit = useExit(detailsEvent ? { event: detailsEvent, anchor: details.anchor } : null);
   const appearanceExit = useExit(appearanceOpen);
+  const menuEvent = menu && events.find((e) => e.id === menu.id);
+  const menuExit = useExit(menuEvent ? { event: menuEvent, x: menu.x, y: menu.y } : null);
   // The form is floating or docked. Moving it between the two plays the
   // closing animation of one and the opening animation of the other.
   const floatExit = useExit(!docked ? draft : null);
@@ -487,7 +489,6 @@ export default function App() {
     main = <YearView cursor={cursor} today={today} onDayClick={openDay} />;
   }
 
-  const menuEvent = menu && events.find((e) => e.id === menu.id);
   // A closing form shows the last draft and ignores the user.
   const noop = () => {};
   const renderEditor = ({ shown, phase, key }, isDocked) => {
@@ -575,18 +576,22 @@ export default function App() {
           onDelete={() => deleteEvent(detailsExit.shown.event.id)}
         />
       )}
-      {menuEvent && (
+      {menuExit.shown && (
         <ContextMenu
-          event={menuEvent}
-          x={menu.x}
-          y={menu.y}
+          key={`menu-${menuExit.key}`}
+          event={menuExit.shown.event}
+          x={menuExit.shown.x}
+          y={menuExit.shown.y}
+          closing={menuExit.phase === 'exit'}
           onClose={() => setMenu(null)}
           onColor={(color) => {
             setMenu(null);
-            patchEvent(menuEvent.id, { color });
+            patchEvent(menuExit.shown.event.id, { color });
           }}
-          onEdit={() => editEvent(menuEvent.id, { left: menu.x, right: menu.x, top: menu.y })}
-          onDelete={() => deleteEvent(menuEvent.id)}
+          onEdit={() =>
+            editEvent(menuExit.shown.event.id, { left: menuExit.shown.x, right: menuExit.shown.x, top: menuExit.shown.y })
+          }
+          onDelete={() => deleteEvent(menuExit.shown.event.id)}
         />
       )}
       {appearanceExit.shown && (
