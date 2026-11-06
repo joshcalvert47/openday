@@ -22,9 +22,16 @@ export default function EventEditor({
       if (e.target?.closest?.('.date-picker')) return;
       setPicker(null);
     };
+    // Close on a press outside the picker and its button.
+    const outside = (e) => {
+      if (e.target?.closest?.('.date-field')) return;
+      setPicker(null);
+    };
     window.addEventListener('scroll', close, true);
     window.addEventListener('resize', close);
+    document.addEventListener('pointerdown', outside, true);
     return () => {
+      document.removeEventListener('pointerdown', outside, true);
       window.removeEventListener('scroll', close, true);
       window.removeEventListener('resize', close);
     };
