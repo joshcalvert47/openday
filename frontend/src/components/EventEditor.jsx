@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Icon from '../icons.jsx';
 import Popover from './Popover.jsx';
 import MiniMonth from './MiniMonth.jsx';
@@ -14,7 +15,19 @@ export default function EventEditor({
 }) {
   const titleRef = useRef(null);
   const [picker, setPicker] = useState(false);
+  const dateBtnRef = useRef(null);
   const isNew = !draft.id;
+
+  // Close the date picker on a press outside it and its button.
+  useEffect(() => {
+    if (!picker) return;
+    const outside = (e) => {
+      if (e.target?.closest?.('.date-field, .date-picker')) return;
+      setPicker(false);
+    };
+    document.addEventListener('pointerdown', outside, true);
+    return () => document.removeEventListener('pointerdown', outside, true);
+  }, [picker]);
 
   useEffect(() => {
     titleRef.current?.focus();
@@ -82,11 +95,11 @@ export default function EventEditor({
         <Icon name="schedule" className="row-icon" size={20} />
         <div className="editor-when">
           <div className="date-field">
-            <button type="button" className="field-btn" onClick={() => setPicker(!picker)} aria-label="Date">
+            <button type="button" className="field-btn" ref={dateBtnRef} onClick={() => setPicker(!picker)} aria-label="Date">
               {T.weekdayName(ws)}, {T.formatDate(ws, settings.dateFormat)}
             </button>
             {picker && (
-              <div className="date-picker" data-popover>
+              <DatePicker anchorRef={dateBtnRef}>
                 <MiniMonth
                   value={day}
                   today={today}
@@ -95,7 +108,7 @@ export default function EventEditor({
                     setWall(d + (ws - day), d + (we - day));
                   }}
                 />
-              </div>
+              </DatePicker>
             )}
           </div>
           <div className="time-fields">
@@ -221,5 +234,46 @@ export default function EventEditor({
     <Popover anchor={anchor} onClose={onClose} className="editor-popover" label={isNew ? 'New event' : 'Edit event'}>
       {form}
     </Popover>
+  );
+}
+
+// The open date picker. Like DropdownList, it is drawn in document.body so the
+// scrolling form never cuts it off, and it follows the date button every frame
+// (form dragged, docked, scrolled, window resized). It sits under the button,
+// or above it when there is not enough room below.
+const PICKER_W = 248;
+const PICKER_H = 300;
+function DatePicker({ anchorRef, children }) {
+  const [pos, setPos] = useState(null);
+  useLayoutEffect(() => {
+    let last = '';
+    let frame = 0;
+    const update = () => {
+      const a = anchorRef.current;
+      if (a) {
+        const r = a.getBoundingClientRect();
+        const vv = window.visualViewport;
+        const vh = vv ? vv.height + vv.offsetTop : window.innerHeight;
+        const vw = window.innerWidth;
+        const key = `${r.left},${r.top},${r.bottom},${vw},${vh}`;
+        if (key !== last) {
+          last = key;
+          let top = r.bottom + 4;
+          if (top + PICKER_H > vh - 8 && r.top - 4 - PICKER_H >= 8) top = r.top - 4 - PICKER_H;
+          top = Math.max(8, Math.min(top, vh - 8 - PICKER_H));
+          setPos({ top, left: Math.max(8, Math.min(r.left, vw - 8 - PICKER_W)) });
+        }
+      }
+      frame = requestAnimationFrame(update);
+    };
+    update();
+    return () => cancelAnimationFrame(frame);
+  }, [anchorRef]);
+
+  return createPortal(
+    <div className="date-picker" data-popover style={pos || { visibility: 'hidden' }}>
+      {children}
+    </div>,
+    document.body,
   );
 }
