@@ -52,6 +52,8 @@ function Field({ label, children }) {
 
 // One group of the left menu ("General", "Add calendar", ...), like the
 // classic calendar: a header that opens or closes it, and its items.
+// Only one group is open at a time. The items are always on the page, so
+// opening and closing can animate their height (CSS, see .settings-nav-sub).
 function NavGroup({ title, active, open, onToggle, onTitle, children }) {
   return (
     <div className="settings-nav-group">
@@ -69,7 +71,9 @@ function NavGroup({ title, active, open, onToggle, onTitle, children }) {
           <Icon name={open ? 'expandLess' : 'expandMore'} size={20} />
         </button>
       </div>
-      {open && <div className="settings-nav-sub">{children}</div>}
+      <div className={`settings-nav-sub ${open ? 'open' : ''}`} inert={open ? undefined : true}>
+        <div className="settings-nav-sub-inner">{children}</div>
+      </div>
     </div>
   );
 }
@@ -93,7 +97,8 @@ function NavItem({ active, onClick, children, title }) {
 //   keyboard shortcuts (one scrolling page; the menu jumps to each part).
 // - "create-calendar": the form to add a calendar.
 // - "calendar-<id>": the settings of one calendar.
-// On tablets and phones the menu is a page of its own; the back arrow returns to it.
+// Tablets and phones (no room for the menu): Settings opens the general page
+// only. Calendar pages are opened from the sidebar (+, or ⋮ → Settings).
 // `focus`: the page to open first ("create-calendar", "calendar-3"), or null.
 export default function SettingsPage({
   settings, onChange, onBack, focus, calendars, onCreateCalendar, onUpdateCalendar, onDeleteCalendar,
@@ -115,10 +120,10 @@ export default function SettingsPage({
   const askPermission = async () => setPermission(await requestNotificationPermission());
 
   const [page, setPage] = useState(focus || 'general');
-  // Tablets and phones: show the menu instead of a page.
-  const [menuShown, setMenuShown] = useState(!focus);
-  const [groups, setGroups] = useState({ general: true, add: true, mine: true });
-  const toggleGroup = (g) => setGroups((s) => ({ ...s, [g]: !s[g] }));
+  // The open group of the menu. Opening a page opens its group and closes the others.
+  const groupOf = (p) => (p === 'general' ? 'general' : p === 'create-calendar' ? 'add' : 'mine');
+  const [openGroup, setOpenGroup] = useState(() => groupOf(focus || 'general'));
+  const toggleGroup = (g) => setOpenGroup((cur) => (cur === g ? null : g));
 
   // A deleted calendar's page falls back to the general page.
   const calendarId = page.startsWith('calendar-') ? Number(page.slice('calendar-'.length)) : null;
@@ -140,8 +145,8 @@ export default function SettingsPage({
   const go = (next, section = null) => {
     pinned.current = section;
     if (section) setCurrent(section);
+    setOpenGroup(groupOf(next));
     setPage(next);
-    setMenuShown(false);
     setScrollTarget(section || 'top');
   };
   useEffect(() => {
@@ -150,7 +155,7 @@ export default function SettingsPage({
     if (scrollTarget === 'top') el.scrollTop = 0;
     else document.getElementById(scrollTarget)?.scrollIntoView({ block: 'start' });
     setScrollTarget(null);
-  }, [scrollTarget, shown, menuShown]);
+  }, [scrollTarget, shown]);
 
   // On the general page, the menu marks the part that is scrolled into view.
   // A part picked in the menu stays marked until the user scrolls by hand
@@ -180,34 +185,45 @@ export default function SettingsPage({
     return created;
   };
 
-  const inPage = narrow && !menuShown;
-  const back = inPage ? () => setMenuShown(true) : onBack;
-  const pageTitle =
-    shown === 'general' ? 'General' : shown === 'create-calendar' ? 'Create new calendar' : calendar?.name;
+  // Tablets and phones show a calendar page's name in the header.
+  const title =
+    !narrow || shown === 'general' ? 'Settings' : shown === 'create-calendar' ? 'Create new calendar' : calendar?.name;
 
   const nav = (
     <nav className="settings-nav" aria-label="Settings">
       <NavGroup
         title="General"
-        active={!narrow && shown === 'general'}
-        open={groups.general}
+        active={shown === 'general'}
+        open={openGroup === 'general'}
         onToggle={() => toggleGroup('general')}
         onTitle={() => go('general')}
       >
         {sections.map((s) => (
-          <NavItem key={s.id} active={!narrow && shown === 'general' && current === s.id} onClick={() => go('general', s.id)}>
+          <NavItem key={s.id} active={shown === 'general' && current === s.id} onClick={() => go('general', s.id)}>
             {s.title}
           </NavItem>
         ))}
       </NavGroup>
-      <NavGroup title="Add calendar" open={groups.add} onToggle={() => toggleGroup('add')}>
-        <NavItem active={!narrow && shown === 'create-calendar'} onClick={() => go('create-calendar')}>
+      <NavGroup
+        title="Add calendar"
+        active={shown === 'create-calendar'}
+        open={openGroup === 'add'}
+        onToggle={() => toggleGroup('add')}
+        onTitle={() => go('create-calendar')}
+      >
+        <NavItem active={shown === 'create-calendar'} onClick={() => go('create-calendar')}>
           Create new calendar
         </NavItem>
       </NavGroup>
-      <NavGroup title="Settings for my calendars" open={groups.mine} onToggle={() => toggleGroup('mine')}>
+      <NavGroup
+        title="Settings for my calendars"
+        active={calendarId !== null && Boolean(calendar)}
+        open={openGroup === 'mine'}
+        onToggle={() => toggleGroup('mine')}
+        onTitle={() => calendars[0] && go(`calendar-${calendars[0].id}`)}
+      >
         {calendars.map((c) => (
-          <NavItem key={c.id} active={!narrow && shown === `calendar-${c.id}`} onClick={() => go(`calendar-${c.id}`)} title={c.name}>
+          <NavItem key={c.id} active={shown === `calendar-${c.id}`} onClick={() => go(`calendar-${c.id}`)} title={c.name}>
             <span className="cal-dot" style={{ background: c.color }} />
             <span className="cal-name">{c.name}</span>
           </NavItem>
@@ -380,17 +396,17 @@ export default function SettingsPage({
         <div className="header-left">
           <button
             className="icon-btn"
-            onClick={back}
-            aria-label={inPage ? 'Back to settings' : 'Back to calendar'}
-            title={inPage ? 'Back to settings' : 'Back to calendar'}
+            onClick={onBack}
+            aria-label="Back to calendar"
+            title="Back to calendar"
           >
             <Icon name="arrowBack" />
           </button>
-          <span className="brand">{inPage ? pageTitle : 'Settings'}</span>
+          <span className="brand">{title}</span>
         </div>
       </header>
-      <div className={`settings-body ${narrow && menuShown ? 'show-menu' : ''}`}>
-        {nav}
+      <div className="settings-body">
+        {!narrow && nav}
         <div
           className="settings-content"
           ref={contentRef}

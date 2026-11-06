@@ -67,7 +67,8 @@ How the app works:
   - Settings page (`SettingsPage.jsx`) has separate pages, like the classic calendar. The left menu has groups that open and close: "General" (one scrolling page: date and time, time zone, events, notifications, appearance, keyboard shortcuts; the menu jumps to each part and marks the one in view), "Add calendar" → "Create new calendar", and "Settings for my calendars" → one page per calendar (`CalendarSettings.jsx`: name, description, time zone, color, delete).
   - New calendars start with the primary time zone and a color no other calendar uses; both can be changed in the create form.
   - Calendar fields save when they lose focus; time zone and color save right away.
-  - Tablets and phones (≤900px): the settings menu is its own page. Picking an item opens its page; the back arrow returns to the menu.
+  - Only one menu group is open at a time. Opening a page (group title or item) opens its group and closes the others. Groups open and close with a height animation (CSS `grid-template-rows`), off when animations are off.
+  - Tablets and phones (≤900px): no settings menu. Settings opens the General page only. Calendar pages open from the sidebar only (+ → Create new calendar, ⋮ → Settings); the header then shows the page name. Back always returns to the calendar.
   - Saving an event into a hidden calendar shows that calendar again.
   - Hidden calendars still send notifications (like the classic calendar).
 - Events are stored as UTC Unix milliseconds. The frontend shows them in the time zone from settings.
