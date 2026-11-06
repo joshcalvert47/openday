@@ -138,6 +138,16 @@ Always include a recommendation and a short reason.
 - Write clear commit messages: a short summary line, then details if needed.
 - Do not open a pull request unless asked.
 
+Keep branches up to date with `main`:
+
+- Agent sessions often start from an old copy of the repository, so a new branch can be behind `main`.
+- Before you start work, run `git fetch origin main`. Create new branches from `origin/main`, not from a local `main` that may be old.
+- Check with `git rev-list --left-right --count origin/main...HEAD`. If the left number is not `0`, the branch is behind.
+  - No commits of your own yet: `git checkout -B <branch> origin/main`.
+  - Already has commits: `git merge origin/main` (this repo uses merge commits).
+- Check again before every push and before opening a pull request, because `main` can move during the session.
+- Exceptions: the owner says otherwise, or there is a good reason (for example, a branch that must build on another unmerged branch). If you do this, say so.
+
 ## Keeping this file up to date
 
 This file is the single source of truth for agent instructions. `CLAUDE.md` points here.
