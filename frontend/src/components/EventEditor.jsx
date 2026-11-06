@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Icon from '../icons.jsx';
 import Popover from './Popover.jsx';
 import MiniMonth from './MiniMonth.jsx';
@@ -12,30 +13,19 @@ export default function EventEditor({
   draft, settings, tz, today, docked, sheet, anchor, onChange, onSave, onClose, onDelete, onToggleDock,
 }) {
   const titleRef = useRef(null);
-  const [picker, setPicker] = useState(null); // fixed position of the date picker, or null when closed
+  const [picker, setPicker] = useState(false);
+  const dateBtnRef = useRef(null);
   const isNew = !draft.id;
 
-  // The picker uses fixed positioning so the scrolling form does not crop it.
-  // Close it when anything scrolls or the window resizes, so it never floats away from its button.
+  // Close the date picker on a press outside it and its button.
   useEffect(() => {
     if (!picker) return;
-    const close = (e) => {
-      if (e.target?.closest?.('.date-picker')) return;
-      setPicker(null);
-    };
-    // Close on a press outside the picker and its button.
     const outside = (e) => {
-      if (e.target?.closest?.('.date-field')) return;
-      setPicker(null);
+      if (e.target?.closest?.('.date-field, .date-picker')) return;
+      setPicker(false);
     };
-    window.addEventListener('scroll', close, true);
-    window.addEventListener('resize', close);
     document.addEventListener('pointerdown', outside, true);
-    return () => {
-      document.removeEventListener('pointerdown', outside, true);
-      window.removeEventListener('scroll', close, true);
-      window.removeEventListener('resize', close);
-    };
+    return () => document.removeEventListener('pointerdown', outside, true);
   }, [picker]);
 
   useEffect(() => {
@@ -104,20 +94,20 @@ export default function EventEditor({
         <Icon name="schedule" className="row-icon" size={20} />
         <div className="editor-when">
           <div className="date-field">
-            <button type="button" className="field-btn" onClick={(e) => setPicker(picker ? null : pickerPos(e.currentTarget))} aria-label="Date">
+            <button type="button" className="field-btn" ref={dateBtnRef} onClick={() => setPicker(!picker)} aria-label="Date">
               {T.weekdayName(ws)}, {T.formatDate(ws, settings.dateFormat)}
             </button>
             {picker && (
-              <div className="date-picker" data-popover style={picker}>
+              <DatePicker anchorRef={dateBtnRef}>
                 <MiniMonth
                   value={day}
                   today={today}
                   onPick={(d) => {
-                    setPicker(null);
+                    setPicker(false);
                     setWall(d + (ws - day), d + (we - day));
                   }}
                 />
-              </div>
+              </DatePicker>
             )}
           </div>
           <div className="time-fields">
@@ -237,17 +227,43 @@ export default function EventEditor({
   );
 }
 
-// Place the date picker below its button, or above it when there is no room below.
-// Keep it inside the window.
+// The open date picker. Like DropdownList, it is drawn in document.body so the
+// scrolling form never cuts it off, and it follows the date button every frame
+// (form dragged, docked, scrolled, window resized). It sits under the button,
+// or above it when there is not enough room below.
 const PICKER_W = 248;
 const PICKER_H = 300;
-function pickerPos(btn) {
-  const r = btn.getBoundingClientRect();
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
-  let top = r.bottom + 4;
-  if (top + PICKER_H > vh - 8 && r.top - 4 - PICKER_H >= 8) top = r.top - 4 - PICKER_H;
-  top = Math.max(8, Math.min(top, vh - 8 - PICKER_H));
-  const left = Math.max(8, Math.min(r.left, vw - 8 - PICKER_W));
-  return { top, left };
+function DatePicker({ anchorRef, children }) {
+  const [pos, setPos] = useState(null);
+  useLayoutEffect(() => {
+    let last = '';
+    let frame = 0;
+    const update = () => {
+      const a = anchorRef.current;
+      if (a) {
+        const r = a.getBoundingClientRect();
+        const vv = window.visualViewport;
+        const vh = vv ? vv.height + vv.offsetTop : window.innerHeight;
+        const vw = window.innerWidth;
+        const key = `${r.left},${r.top},${r.bottom},${vw},${vh}`;
+        if (key !== last) {
+          last = key;
+          let top = r.bottom + 4;
+          if (top + PICKER_H > vh - 8 && r.top - 4 - PICKER_H >= 8) top = r.top - 4 - PICKER_H;
+          top = Math.max(8, Math.min(top, vh - 8 - PICKER_H));
+          setPos({ top, left: Math.max(8, Math.min(r.left, vw - 8 - PICKER_W)) });
+        }
+      }
+      frame = requestAnimationFrame(update);
+    };
+    update();
+    return () => cancelAnimationFrame(frame);
+  }, [anchorRef]);
+
+  return createPortal(
+    <div className="date-picker" data-popover style={pos || { visibility: 'hidden' }}>
+      {children}
+    </div>,
+    document.body,
+  );
 }
