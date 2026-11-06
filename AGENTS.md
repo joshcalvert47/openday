@@ -60,7 +60,7 @@ How the app works:
 - Notifications (`frontend/src/notifications.js`):
   - Each event has `reminders`: up to 5 times in minutes before the start (0 to 4 weeks). Stored as a JSON array in the `reminders` column (added by `migrate` in `store.go` for older databases).
   - New events get the "Default notification" from settings.
-  - In the event form, each notification time is a `TimeInput` (like event times): pick from the list or type any time ("45", "90 min", "2 hours", "1.5h", "3 days", "1 week", "at time of event"). Typed text is read by `parseReminder` in `time.js`. A plain number means minutes. Invalid text or more than 4 weeks keeps the old value.
+  - In the event form, each notification is a number field plus a unit drop-down (minutes, hours, days, weeks), like the classic calendar (`ReminderList.jsx`). The value is stored in minutes, so the unit is not saved: a reopened event shows the largest unit that fits ("60 minutes" comes back as "1 hour"). Numbers outside 0 to 4 weeks are marked red and not saved; leaving the field puts back the last good value. Changing the unit keeps the number (capped at 4 weeks).
   - The page checks every 10 seconds which reminders are due. There is no server push, so a calendar tab must be open. Reminders more than 10 minutes late are skipped.
   - "Notifications" setting: Off, Desktop notifications (browser `Notification` API), or Alerts (dialog in the page). If the browser blocks desktop notifications, alerts are used instead.
   - Desktop notifications are shown by a small service worker (`frontend/public/sw.js`) so they can have a Snooze button. A snoozed notification shows again "Show snoozed notifications" minutes before the event (or 5 minutes later if that time has passed).

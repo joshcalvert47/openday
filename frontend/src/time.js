@@ -192,36 +192,16 @@ export function formatReminder(minutes) {
   return `${n} ${name}${n === 1 ? '' : 's'} before`;
 }
 
-const REMINDER_UNITS = [
-  ['minutes', 1],
-  ['mins', 1],
-  ['hours', 60],
-  ['hrs', 60],
-  ['days', 24 * 60],
-  ['weeks', 7 * 24 * 60],
-  ['wks', 7 * 24 * 60],
+// Units for a notification time: "10 [minutes]", "2 [hours]", "3 [days]", "1 [week]".
+export const REMINDER_UNITS = [
+  { value: 1, one: 'minute', many: 'minutes' },
+  { value: 60, one: 'hour', many: 'hours' },
+  { value: 24 * 60, one: 'day', many: 'days' },
+  { value: 7 * 24 * 60, one: 'week', many: 'weeks' },
 ];
 export const MAX_REMINDER = 4 * 7 * 24 * 60; // 4 weeks, same as the backend
 
-// Read a notification time the user typed. Returns minutes before the event, or null.
-// "45" (minutes), "45m", "90 min", "2h", "1.5 hours", "3 days before", "1w",
-// "0" or "at time of event".
-// partial: the user is still typing ("2 ho"), so a started unit word is accepted.
-// Unit words can always be shortened ("2 hou" = 2 hours) once typing is done too.
-export function parseReminder(text) {
-  let t = text.trim().toLowerCase().replace(/\s+/g, ' ');
-  if (!t) return null;
-  if (/^(at|at time|at time of|at time of event|at the time of event|now)$/.test(t)) return 0;
-  t = t.replace(/\s*before( event| the event)?$/, '').replace(/\s*(b|be|bef|befo|befor)$/, '');
-  const m = t.match(/^(\d+(?:[.,]\d*)?)\s*([a-z]*)$/);
-  if (!m) return null;
-  const n = parseFloat(m[1].replace(',', '.'));
-  let size = 1;
-  if (m[2]) {
-    const unit = REMINDER_UNITS.find(([word]) => word.startsWith(m[2]) || m[2] === word.slice(0, -1));
-    if (!unit) return null;
-    size = unit[1];
-  }
-  const minutes = Math.round(n * size);
-  return Number.isFinite(minutes) && minutes >= 0 && minutes <= MAX_REMINDER ? minutes : null;
+// The largest unit that fits exactly: 120 -> 2 hours, 90 -> 90 minutes.
+export function bestReminderUnit(minutes) {
+  return [...REMINDER_UNITS].reverse().find((u) => minutes % u.value === 0 && minutes > 0)?.value ?? 1;
 }

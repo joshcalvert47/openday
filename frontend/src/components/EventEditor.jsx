@@ -148,6 +148,7 @@ export default function EventEditor({
       <div className="editor-row">
         <Icon name="notifications" className="row-icon" size={20} />
         <ReminderList
+          key={draft.id ?? 'new'}
           value={draft.reminders || []}
           defaultReminder={settings.defaultReminder}
           onChange={(reminders) => onChange({ reminders })}

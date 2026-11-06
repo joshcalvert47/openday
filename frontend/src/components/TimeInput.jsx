@@ -9,8 +9,7 @@ import DropdownList from './DropdownList.jsx';
 // resolve(text, partial) -> value, or null if the text is not a time
 //   (partial = still typing; used only to pick the closest option)
 // format(value) -> text shown in the field
-// Also used for notification times (minutes before the event).
-export default function TimeInput({ value, options, resolve, format, onChange, className = 'field-btn time-input', ...rest }) {
+export default function TimeInput({ value, options, resolve, format, onChange, ...rest }) {
   const id = useId();
   const inputRef = useRef(null);
   const [open, setOpen] = useState(false);
@@ -78,7 +77,7 @@ export default function TimeInput({ value, options, resolve, format, onChange, c
     <>
       <input
         ref={inputRef}
-        className={className}
+        className="field-btn time-input"
         role="combobox"
         aria-autocomplete="list"
         aria-expanded={open}
