@@ -41,7 +41,4 @@ export const api = {
   deleteEvent: (id) => request('DELETE', `/api/events/${id}`),
   getSettings: () => request('GET', '/api/settings'),
   updateSettings: (patch) => request('PUT', '/api/settings', patch),
-  pushKey: async () => (await request('GET', '/api/push/key')).publicKey,
-  savePushSubscription: (sub) => request('POST', '/api/push/subscriptions', sub),
-  pushSent: async (key) => (await request('GET', `/api/push/sent?${new URLSearchParams({ key })}`)).sent,
 };

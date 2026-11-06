@@ -28,7 +28,6 @@ func (a *API) Register(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/events/{id}", a.deleteEvent)
 	mux.HandleFunc("GET /api/settings", a.getSettings)
 	mux.HandleFunc("PUT /api/settings", a.putSettings)
-	a.registerPush(mux)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
 	})
@@ -233,11 +232,9 @@ func contains[T comparable](list []T, v T) bool {
 	return false
 }
 
-func (a *API) loadSettings() (Settings, error) { return loadSettings(a.store) }
-
-func loadSettings(store *Store) (Settings, error) {
+func (a *API) loadSettings() (Settings, error) {
 	s := defaultSettings
-	raw, err := store.GetSettings()
+	raw, err := a.store.GetSettings()
 	if err != nil {
 		return s, err
 	}

@@ -4,13 +4,7 @@ import Select from './Select.jsx';
 import SearchSelect from './SearchSelect.jsx';
 import { ThemeOptions } from './AppearanceDialog.jsx';
 import * as T from '../time.js';
-import {
-  REMINDER_PRESETS,
-  notificationPermission,
-  requestNotificationPermission,
-  playChime,
-  ensurePush,
-} from '../notifications.js';
+import { REMINDER_PRESETS, notificationPermission, requestNotificationPermission, playChime } from '../notifications.js';
 
 const DURATIONS = [15, 20, 30, 45, 60, 90, 120];
 const SNOOZE_OPTIONS = [0, 1, 5, 10, 15, 30];
@@ -63,11 +57,7 @@ export default function SettingsPage({ settings, onChange, onBack }) {
   );
   const sample = T.makeDay(2026, 11, 31) + 13 * T.HOUR;
   const [permission, setPermission] = useState(notificationPermission);
-  const askPermission = async () => {
-    const p = await requestNotificationPermission();
-    setPermission(p);
-    if (p === 'granted') ensurePush();
-  };
+  const askPermission = async () => setPermission(await requestNotificationPermission());
 
   return (
     <div className="settings">
