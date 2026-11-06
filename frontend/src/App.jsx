@@ -17,6 +17,7 @@ import NotificationAlert from './components/NotificationAlert.jsx';
 import { describeWhen } from './components/EventDetails.jsx';
 import { useNotifications } from './notifications.js';
 import { useMedia, NARROW, PHONE } from './useMedia.js';
+import { useExit } from './motion.js';
 
 const DEFAULT_SETTINGS = {
   dateFormat: 'MDY',
@@ -28,6 +29,7 @@ const DEFAULT_SETTINGS = {
   snoozeBefore: 1,
   notificationSound: true,
   defaultReminder: 30,
+  animations: true,
 };
 
 const VIEWS = ['day', 'week', 'month', 'year'];
@@ -74,6 +76,9 @@ export default function App() {
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const tz = settings.timeZone || T.browserTimeZone();
   useResolvedTheme(settings.theme);
+  useEffect(() => {
+    document.documentElement.dataset.motion = settings.animations ? 'on' : 'off';
+  }, [settings.animations]);
 
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -118,8 +123,24 @@ export default function App() {
 
   const describe = (event) => describeWhen(event, tz, settings);
   const { alerts, dismissAlerts } = useNotifications({ settings, describe, changeKey: events });
-  const alertBox = alerts.length > 0 && (
-    <NotificationAlert alerts={alerts} describe={describe} onClose={dismissAlerts} />
+  const alertExit = useExit(alerts.length > 0 ? alerts : null);
+  const alertBox = alertExit.shown && (
+    <NotificationAlert
+      key={`alert-${alertExit.key}`}
+      alerts={alertExit.shown}
+      describe={describe}
+      onClose={dismissAlerts}
+      closing={alertExit.phase === 'exit'}
+    />
+  );
+  const snackExit = useExit(snack);
+  const snackBar = snackExit.shown && (
+    <Snackbar
+      key={`snack-${snackExit.key}`}
+      {...snackExit.shown}
+      onClose={() => setSnack(null)}
+      closing={snackExit.phase === 'exit'}
+    />
   );
 
   const showError = useCallback((err) => setSnack({ text: err.message || String(err) }), []);
@@ -401,12 +422,27 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  // ---- Things that animate when they open and close (see motion.js) ----
+  // They stay on the page for a moment after closing, showing what they
+  // showed last. Hooks must run before the early return below.
+  const detailsEvent = details && events.find((e) => e.id === details.id);
+  const detailsExit = useExit(detailsEvent ? { event: detailsEvent, anchor: details.anchor } : null);
+  const appearanceExit = useExit(appearanceOpen);
+  const menuEvent = menu && events.find((e) => e.id === menu.id);
+  const menuExit = useExit(menuEvent ? { event: menuEvent, x: menu.x, y: menu.y } : null);
+  // The form is floating or docked. Moving it between the two plays the
+  // closing animation of one and the opening animation of the other.
+  const floatExit = useExit(!docked ? draft : null);
+  const dockExit = useExit(docked ? draft : null);
+  // The docked form takes the sidebar's place, so the sidebar closes meanwhile.
+  const sidebarExit = useExit(sidebarOpen && !(docked && draft));
+
   // ---- Render ----
   if (page === 'settings') {
     return (
       <>
         <SettingsPage settings={settings} onChange={updateSettings} onBack={() => setPage('calendar')} />
-        {snack && <Snackbar {...snack} onClose={() => setSnack(null)} />}
+        {snackBar}
         {alertBox}
       </>
     );
@@ -453,24 +489,32 @@ export default function App() {
     main = <YearView cursor={cursor} today={today} onDayClick={openDay} />;
   }
 
-  const detailsEvent = details && events.find((e) => e.id === details.id);
-  const menuEvent = menu && events.find((e) => e.id === menu.id);
-  const editor = draft && (
-    <EventEditor
-      draft={draft}
-      settings={settings}
-      tz={tz}
-      today={today}
-      docked={docked}
-      anchor={editorAnchor}
-      onChange={(patch) => setDraft((d) => ({ ...d, ...patch }))}
-      onSave={saveDraft}
-      onClose={() => setDraft(null)}
-      onDelete={draft.id ? () => deleteEvent(draft.id) : null}
-      sheet={phone}
-      onToggleDock={phone ? null : () => setDocked(!docked)}
-    />
-  );
+  // A closing form shows the last draft and ignores the user.
+  const noop = () => {};
+  const renderEditor = ({ shown, phase, key }, isDocked) => {
+    if (!shown) return null;
+    const closing = phase === 'exit';
+    return (
+      <EventEditor
+        key={`editor-${isDocked}-${key}`}
+        draft={shown}
+        settings={settings}
+        tz={tz}
+        today={today}
+        docked={isDocked}
+        closing={closing}
+        anchor={editorAnchor}
+        onChange={closing ? noop : (patch) => setDraft((d) => ({ ...d, ...patch }))}
+        onSave={closing ? noop : saveDraft}
+        onClose={closing ? noop : () => setDraft(null)}
+        onDelete={shown.id && !closing ? () => deleteEvent(shown.id) : null}
+        sheet={phone}
+        onToggleDock={phone || closing ? null : () => setDocked(!docked)}
+      />
+    );
+  };
+  const dockClosing = dockExit.phase === 'exit';
+  const sidebarClosing = sidebarExit.phase === 'exit';
 
   return (
     <div className="app">
@@ -487,64 +531,79 @@ export default function App() {
       />
       <div className="app-body">
         {/* Docked form takes the sidebar's place on the left, like the classic calendar. */}
-        {docked && editor ? (
-          <aside className="dock">{editor}</aside>
-        ) : (
-          sidebarOpen && (
-            <>
-              {narrow && <div className="sidebar-backdrop" onClick={() => setPhoneSidebar(false)} />}
-              <Sidebar
-                cursor={cursor}
-                today={today}
-                onCreate={createFromButton}
-                onOpenSettings={openSettings}
-                onPick={(d) => {
-                  setCursor(d);
-                  if (narrow) setPhoneSidebar(false);
-                }}
+        {dockExit.shown && (
+          <aside key={`dock-${dockExit.key}`} className={`dock ${dockClosing ? 'closing' : ''}`} inert={dockClosing || undefined}>
+            {renderEditor(dockExit, true)}
+          </aside>
+        )}
+        {sidebarExit.shown && (
+          <>
+            {narrow && (
+              <div
+                className={`sidebar-backdrop ${sidebarExit.phase === 'enter' ? 'entering' : ''} ${sidebarClosing ? 'closing' : ''}`}
+                onClick={sidebarClosing ? undefined : () => setPhoneSidebar(false)}
               />
-            </>
-          )
+            )}
+            <Sidebar
+              cursor={cursor}
+              today={today}
+              phase={sidebarExit.phase}
+              onCreate={createFromButton}
+              onOpenSettings={openSettings}
+              onPick={(d) => {
+                setCursor(d);
+                if (narrow) setPhoneSidebar(false);
+              }}
+            />
+          </>
         )}
         <main className="main" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
           {main}
         </main>
       </div>
 
-      {!docked && editor}
-      {detailsEvent && (
+      {renderEditor(floatExit, false)}
+      {detailsExit.shown && (
         <EventDetails
-          event={detailsEvent}
+          key={`details-${detailsExit.key}`}
+          event={detailsExit.shown.event}
           tz={tz}
           settings={settings}
-          anchor={details.anchor}
+          anchor={detailsExit.shown.anchor}
+          closing={detailsExit.phase === 'exit'}
           onClose={() => setDetails(null)}
-          onEdit={() => editEvent(detailsEvent.id, details.anchor)}
-          onDelete={() => deleteEvent(detailsEvent.id)}
+          onEdit={() => editEvent(detailsExit.shown.event.id, detailsExit.shown.anchor)}
+          onDelete={() => deleteEvent(detailsExit.shown.event.id)}
         />
       )}
-      {menuEvent && (
+      {menuExit.shown && (
         <ContextMenu
-          event={menuEvent}
-          x={menu.x}
-          y={menu.y}
+          key={`menu-${menuExit.key}`}
+          event={menuExit.shown.event}
+          x={menuExit.shown.x}
+          y={menuExit.shown.y}
+          closing={menuExit.phase === 'exit'}
           onClose={() => setMenu(null)}
           onColor={(color) => {
             setMenu(null);
-            patchEvent(menuEvent.id, { color });
+            patchEvent(menuExit.shown.event.id, { color });
           }}
-          onEdit={() => editEvent(menuEvent.id, { left: menu.x, right: menu.x, top: menu.y })}
-          onDelete={() => deleteEvent(menuEvent.id)}
+          onEdit={() =>
+            editEvent(menuExit.shown.event.id, { left: menuExit.shown.x, right: menuExit.shown.x, top: menuExit.shown.y })
+          }
+          onDelete={() => deleteEvent(menuExit.shown.event.id)}
         />
       )}
-      {appearanceOpen && (
+      {appearanceExit.shown && (
         <AppearanceDialog
+          key={`appearance-${appearanceExit.key}`}
           theme={settings.theme}
+          closing={appearanceExit.phase === 'exit'}
           onChange={(theme) => updateSettings({ theme })}
           onClose={() => setAppearanceOpen(false)}
         />
       )}
-      {snack && <Snackbar {...snack} onClose={() => setSnack(null)} />}
+      {snackBar}
       {alertBox}
     </div>
   );

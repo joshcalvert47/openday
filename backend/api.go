@@ -190,6 +190,8 @@ type Settings struct {
 	NotificationSound bool `json:"notificationSound"`
 	// DefaultReminder: minutes before the event for new events, or -1 for no notification.
 	DefaultReminder int `json:"defaultReminder"`
+	// Animations: play opening and closing animations (sidebar, cards, dialogs).
+	Animations bool `json:"animations"`
 }
 
 var defaultSettings = Settings{
@@ -203,6 +205,8 @@ var defaultSettings = Settings{
 	SnoozeBefore:      1,
 	NotificationSound: true,
 	DefaultReminder:   30,
+
+	Animations: true,
 }
 
 var (
@@ -263,6 +267,9 @@ func (a *API) loadSettings() (Settings, error) {
 		s.NotificationSound = v == "true"
 	}
 	intSetting(raw, "defaultReminder", allowedDefaultRem, &s.DefaultReminder)
+	if v, ok := raw["animations"]; ok {
+		s.Animations = v == "true"
+	}
 	return s, nil
 }
 
@@ -288,6 +295,8 @@ func (a *API) putSettings(w http.ResponseWriter, r *http.Request) {
 		SnoozeBefore      *int    `json:"snoozeBefore"`
 		NotificationSound *bool   `json:"notificationSound"`
 		DefaultReminder   *int    `json:"defaultReminder"`
+
+		Animations *bool `json:"animations"`
 	}
 	if !readJSON(w, r, &in) {
 		return
@@ -353,6 +362,9 @@ func (a *API) putSettings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		values["defaultReminder"] = strconv.Itoa(*in.DefaultReminder)
+	}
+	if in.Animations != nil {
+		values["animations"] = strconv.FormatBool(*in.Animations)
 	}
 	if err := a.store.SetSettings(values); err != nil {
 		serverError(w, err)

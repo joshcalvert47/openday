@@ -235,11 +235,8 @@ button {
   flex-direction: column;
   background: var(--surface);
   border-radius: 24px 24px 0 0;
-  margin-right: 16px;
+  margin: 0 16px;
   overflow: hidden;
-}
-.app-body > .main:first-child {
-  margin-left: 16px;
 }
 
 /* ---------- Sidebar ---------- */
@@ -247,7 +244,11 @@ button {
 .sidebar {
   width: 256px;
   flex: none;
+  /* The calendar always has a 16px left margin. The sidebar takes it back,
+     so the sidebar can shrink to nothing without the calendar jumping. */
+  margin-right: -16px;
   padding: 8px 8px 16px 8px;
+  overflow-x: hidden;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -909,7 +910,6 @@ button {
   width: 380px;
   flex: none;
   margin-left: 16px;
-  margin-right: 16px;
   background: var(--surface);
   border-radius: 24px 24px 0 0;
   overflow: hidden;
@@ -1619,5 +1619,196 @@ body {
   body:has(.popover.sheet) .snackbar {
     top: 64px;
     bottom: auto;
+  }
+}
+
+/* ---------- Animations ----------
+   Opening and closing animations. Closing elements get the class `closing`
+   and stay on the page until their animation ends (useExit in motion.js;
+   EXIT_MS there must be at least the longest closing animation here).
+   The "Animations" setting (data-motion on <html>) and the device's
+   "reduce motion" setting turn them all off. */
+
+/* Sidebar and docked form (wide screens): they grow and shrink, and the
+   calendar follows. Docking closes the sidebar while the form opens (and the
+   other way round), so all four use the same timing: the calendar edge then
+   moves smoothly in one direction. */
+@media (min-width: 901px) {
+  .sidebar .mini {
+    min-width: 240px;
+  }
+  .sidebar.entering {
+    animation: sidebar-in 0.18s ease-in-out;
+  }
+  .sidebar.closing {
+    animation: sidebar-out 0.18s ease-in-out forwards;
+  }
+  .dock {
+    animation: dock-in 0.18s ease-in-out;
+  }
+  .dock .editor {
+    width: 380px;
+    flex: none;
+  }
+  .dock.closing {
+    animation: dock-out 0.18s ease-in-out forwards;
+  }
+}
+@keyframes sidebar-in {
+  from {
+    width: 16px;
+  }
+}
+@keyframes sidebar-out {
+  to {
+    width: 16px;
+  }
+}
+@keyframes dock-in {
+  from {
+    width: 0;
+    margin-left: 0;
+    opacity: 0;
+  }
+}
+@keyframes dock-out {
+  to {
+    width: 0;
+    margin-left: 0;
+    opacity: 0;
+  }
+}
+
+/* Sidebar (tablets and phones): it slides in over the calendar. */
+@media (max-width: 900px) {
+  .sidebar.entering {
+    animation: drawer-in 0.2s ease-out;
+  }
+  .sidebar.closing {
+    animation: drawer-out 0.16s ease-in forwards;
+  }
+  .sidebar-backdrop.entering {
+    animation: fade-in 0.2s ease-out;
+  }
+  .sidebar-backdrop.closing {
+    animation: fade-out 0.16s ease-in forwards;
+  }
+  /* The docked form covers the calendar here. */
+  .dock {
+    animation: rise-in 0.2s ease-out;
+  }
+  .dock.closing {
+    animation: rise-out 0.16s ease-in forwards;
+  }
+}
+@keyframes drawer-in {
+  from {
+    transform: translateX(-100%);
+  }
+}
+@keyframes drawer-out {
+  to {
+    transform: translateX(-100%);
+  }
+}
+
+/* Event details card and floating event form. */
+.popover {
+  animation: pop-in 0.15s ease-out;
+}
+.popover.closing {
+  animation: pop-out 0.12s ease-in forwards;
+}
+/* Phone sheets slide up (sheet-in above) and back down. */
+.popover.sheet.closing {
+  animation: sheet-out 0.16s ease-in forwards;
+}
+.closing {
+  pointer-events: none;
+}
+@keyframes sheet-out {
+  to {
+    transform: translateY(100%);
+  }
+}
+
+/* Right-click menu on an event: grows out of the clicked point. */
+.ctx-menu {
+  animation: pop-in 0.12s ease-out;
+}
+.ctx-menu.closing {
+  animation: fade-out 0.1s ease-in forwards;
+}
+
+/* Dialogs (Appearance, reminder alerts). */
+.modal-backdrop {
+  animation: fade-in 0.15s ease-out;
+}
+.modal-backdrop .modal {
+  animation: pop-in 0.15s ease-out;
+}
+.modal-backdrop.closing {
+  animation: fade-out 0.15s ease-in forwards;
+}
+.modal-backdrop.closing .modal {
+  animation: pop-out 0.15s ease-in forwards;
+}
+
+/* Snackbar. */
+.snackbar {
+  animation: rise-in 0.2s ease-out;
+}
+.snackbar.closing {
+  animation: fade-out 0.15s ease-in forwards;
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+}
+@keyframes pop-out {
+  to {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes fade-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+}
+@keyframes rise-out {
+  to {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+}
+
+/* Animations off: the "Animations" setting, or the device asks for less motion. */
+:root[data-motion='off'] *,
+:root[data-motion='off'] *::before,
+:root[data-motion='off'] *::after {
+  animation: none !important;
+  transition: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
   }
 }

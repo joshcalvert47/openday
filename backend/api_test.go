@@ -132,6 +132,18 @@ func TestSettings(t *testing.T) {
 		t.Fatalf("after notification put: %+v", s)
 	}
 
+	if !s.Animations {
+		t.Fatalf("animations should be on by default: %+v", s)
+	}
+	code, body = do(t, srv, "PUT", "/api/settings", `{"animations":false}`)
+	if code != http.StatusOK {
+		t.Fatalf("put animations: %d %s", code, body)
+	}
+	_ = json.Unmarshal([]byte(body), &s)
+	if s.Animations || s.Notifications != "alerts" {
+		t.Fatalf("after animations put: %+v", s)
+	}
+
 	for _, b := range []string{`{"timeZone":"Mars/Base"}`, `{"defaultDuration":7}`, `{"theme":"blue"}`,
 		`{"notifications":"loud"}`, `{"snoozeBefore":2}`, `{"defaultReminder":7}`} {
 		if code, _ := do(t, srv, "PUT", "/api/settings", b); code != http.StatusBadRequest {

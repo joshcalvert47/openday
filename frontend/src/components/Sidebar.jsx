@@ -2,9 +2,12 @@ import Icon from '../icons.jsx';
 import MiniMonth from './MiniMonth.jsx';
 import * as T from '../time.js';
 
-export default function Sidebar({ cursor, today, onCreate, onPick, onOpenSettings }) {
+// `phase` comes from useExit (motion.js): 'enter' and 'exit' play the
+// opening and closing animations.
+export default function Sidebar({ cursor, today, phase, onCreate, onPick, onOpenSettings }) {
+  const closing = phase === 'exit';
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar ${phase === 'enter' ? 'entering' : ''} ${closing ? 'closing' : ''}`} inert={closing || undefined}>
       <button className="create-btn" onClick={onCreate}>
         <Icon name="add" size={28} className="create-plus" />
         <span>Create</span>

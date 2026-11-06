@@ -17,9 +17,9 @@ export function ThemeOptions({ theme, onChange, name }) {
   );
 }
 
-export default function AppearanceDialog({ theme, onChange, onClose }) {
+export default function AppearanceDialog({ theme, onChange, onClose, closing }) {
   return (
-    <div className="modal-backdrop" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div className={`modal-backdrop ${closing ? 'closing' : ''}`} inert={closing || undefined} onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal" role="dialog" aria-label="Appearance">
         <h2>Appearance</h2>
         <h3>Theme</h3>

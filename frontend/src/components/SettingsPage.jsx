@@ -4,6 +4,7 @@ import Select from './Select.jsx';
 import SearchSelect from './SearchSelect.jsx';
 import { ThemeOptions } from './AppearanceDialog.jsx';
 import * as T from '../time.js';
+import { deviceReducesMotion } from '../motion.js';
 import { REMINDER_PRESETS, notificationPermission, requestNotificationPermission, playChime } from '../notifications.js';
 
 const DURATIONS = [15, 20, 30, 45, 60, 90, 120];
@@ -163,6 +164,19 @@ export default function SettingsPage({ settings, onChange, onBack }) {
             <h2>Appearance</h2>
             <h3>Theme</h3>
             <ThemeOptions theme={settings.theme} onChange={(theme) => onChange({ theme })} name="theme-settings" />
+
+            <h3>Motion</h3>
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={settings.animations}
+                onChange={(e) => onChange({ animations: e.target.checked })}
+              />
+              <span>Show animations</span>
+            </label>
+            {settings.animations && deviceReducesMotion() && (
+              <p className="settings-note">Your device is set to reduce motion, so animations are not shown.</p>
+            )}
           </section>
         </div>
       </div>

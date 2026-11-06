@@ -56,7 +56,7 @@ How the app works:
 
 - API lives under `/api` (`backend/api.go`): `GET/POST /api/events`, `PUT/DELETE /api/events/{id}`, `GET/PUT /api/settings`, `GET /api/health`.
 - Events are stored as UTC Unix milliseconds. The frontend shows them in the time zone from settings.
-- Settings (date format, time format, time zone, default duration, default notification, notification settings, theme) are stored in the database, so they follow the user across browsers.
+- Settings (date format, time format, time zone, default duration, default notification, notification settings, theme, animations) are stored in the database, so they follow the user across browsers.
 - Notifications (`frontend/src/notifications.js`):
   - Each event has `reminders`: up to 5 times in minutes before the start (0 to 4 weeks). Stored as a JSON array in the `reminders` column (added by `migrate` in `store.go` for older databases).
   - New events get the "Default notification" from settings.
@@ -68,6 +68,11 @@ How the app works:
   - Shown reminders and snoozes are kept in `localStorage`, so a reminder shows once even with several tabs open or after a reload.
   - Desktop notifications need HTTPS or `localhost` (browser rule). Headless Chromium always denies them, so tests stub `Notification.permission` and `showNotification`.
 - Small per-browser preferences (current view, sidebar open) are kept in `localStorage`.
+- Animations (CSS only, in the "Animations" section at the end of `styles.css`):
+  - Sidebar (grows/shrinks on wide screens, slides in on tablets and phones), event details card, floating event form and right-click menu (fade and grow), phone sheets (slide up and down), docking the form (the panel grows while the sidebar shrinks), dialogs, snackbar.
+  - Closing animations: `useExit` in `frontend/src/motion.js` keeps a closing element on the page (class `closing`) until its animation ends. Its `key` is used as a React key with a prefix (`details-3`), so siblings never share a key.
+  - The "Show animations" setting (Settings → Appearance, stored as `animations`) sets `data-motion` on `<html>`. Off, or the device asks for reduced motion (`prefers-reduced-motion`): no animations at all.
+  - Keep animations short (about 150 to 200 ms). `EXIT_MS` in `motion.js` must be at least the longest closing animation.
 - Drop-downs: no browser `<select>`. Use `Select.jsx` (styled list, keyboard and type-ahead). Long lists (time zones) use `SearchSelect.jsx`: type to search, the list scrolls to the best match in real time (nothing is hidden). Lists are drawn by `DropdownList.jsx` in `document.body` and follow their field (e.g. when the form is dragged).
 - Event times use `TimeInput.jsx`: pick from the list or type any time ("9", "930", "9:30pm", "21:15"). While typing, the list scrolls to the closest option. Typed text is read by `parseTime` in `time.js`. In 12h format, a time without am/pm picks the one closest to the current start (start field) or the first one after the start (end field).
 - The event form always opens floating. The user can dock it; it is never docked by default.
