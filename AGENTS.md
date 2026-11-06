@@ -13,9 +13,18 @@ When making product or UI decisions, the default answer is: **do what Google Cal
 
 ## Project status
 
-The project is at the very start. There is no code yet.
+First working version: day/week/month/year views, events (create, edit, move, resize, color, delete), settings, light/dark theme.
 
-- Build, test and lint commands: **none yet.**
+Commands:
+
+| What | Command |
+| --- | --- |
+| Run backend (dev) | `cd backend && go run .` (listens on `:8080`, database `openday.db`) |
+| Run frontend (dev) | `cd frontend && npm install && npm run dev` (Vite on `:5173`, proxies `/api` to `:8080`) |
+| Backend tests | `cd backend && go test ./...` |
+| Frontend build | `cd frontend && npm run build` |
+| Docker image | `docker build -t openday .` |
+| Lint | none yet |
 
 ## Tech stack
 
@@ -30,6 +39,36 @@ The project is at the very start. There is no code yet.
 
 Why: easy to self-host. One container, one binary, one database file, low memory use.
 
+Smaller decisions (made in the first version; change them only after asking the owner):
+
+| Part | Choice |
+| --- | --- |
+| Go HTTP routing | Standard library `net/http` (`ServeMux` with method patterns). No web framework. |
+| SQLite driver | `modernc.org/sqlite` (pure Go, no CGO, so the Docker build stays simple). |
+| Frontend language | JavaScript (JSX). No TypeScript yet. |
+| Frontend libraries | Only `react` and `react-dom`. No router, state or date library. |
+| Styling | One plain CSS file (`frontend/src/styles.css`) with CSS variables for light/dark themes. |
+| Icons | Inline SVG paths in `frontend/src/icons.jsx` (Material Design icon shapes, Apache 2.0). |
+| Time zones | Browser `Intl` API (`frontend/src/time.js`). Go embeds `time/tzdata`. |
+| Final Docker image | `alpine`, runs as a non-root user, data in `/data`. |
+
+How the app works:
+
+- API lives under `/api` (`backend/api.go`): `GET/POST /api/events`, `PUT/DELETE /api/events/{id}`, `GET/PUT /api/settings`, `GET /api/health`.
+- Events are stored as UTC Unix milliseconds. The frontend shows them in the time zone from settings.
+- Settings (date format, time format, time zone, default duration, theme) are stored in the database, so they follow the user across browsers.
+- Small per-browser preferences (current view, sidebar open) are kept in `localStorage`.
+- The event form always opens floating. The user can dock it; it is never docked by default.
+- Phones and touch (breakpoints: 900px and 600px in `styles.css`):
+  - Sidebar floats over the calendar and starts closed.
+  - Phones (≤600px): no Today or settings button in the header; Settings is at the bottom of the sidebar.
+  - Phones (≤600px): the event form and details card are sheets stuck to the bottom of the screen. No dock button, no dragging the card. In the form sheet, Close is top left and Save top right (so the keyboard never hides Save); Delete stays at the bottom.
+  - Breakpoints are shared in `frontend/src/useMedia.js` (`NARROW`, `PHONE`); keep them in sync with `styles.css`.
+  - Tap = click. Long press on an event = drag it, or open its menu if the finger does not move. Swipe left/right = next/previous period.
+  - After a finger tap opens a card, the "ghost" click from the browser is cancelled (see `eatGhostClick` in `TimeGrid.jsx`).
+  - Test with Playwright device emulation (e.g. `devices['Pixel 7']`) and touch events.
+- Environment variables: `OPENDAY_ADDR` (default `:8080`), `OPENDAY_DB` (default `openday.db`; `/data/openday.db` in Docker).
+
 ## Folder layout
 
 One repository, two main folders:
@@ -37,7 +76,9 @@ One repository, two main folders:
 ```
 openday/
 ├── backend/     # Go code (API + serves the embedded frontend)
+│   └── web/dist # frontend build is copied here before `go build` (only .gitkeep in git)
 ├── frontend/    # React app (Vite)
+│   └── public/logo.svg  # copy of assets/logo.svg (favicon + header logo)
 ├── assets/      # project images (e.g. logo.svg, used in README)
 ├── Dockerfile   # builds frontend, then backend, into one image
 ├── README.md

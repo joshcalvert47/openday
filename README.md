@@ -11,30 +11,70 @@
 
 ---
 
-## Why OpenDay?
+## Run
 
-- **Familiar.** Almost the same layout, views and workflow as Google Calendar. Nothing new to learn.
-- **Yours.** Self-host it. Your events stay on your own server.
-- **Simple to run.** One Docker container, one binary, one SQLite database file.
-- **Light.** Low memory use. Runs fine on a small server or a Raspberry Pi.
-- **Open source.** MIT license.
+You need [Docker](https://docs.docker.com/get-docker/).
 
-## Status
+```bash
+git clone https://github.com/nikolozlortki/openday.git
+cd openday
+docker build -t openday .
+docker run -d --name openday -p 8080:8080 -v openday-data:/data --restart unless-stopped openday
+```
 
-🚧 **Early stage.** There is no code yet. The tech stack and layout are decided; building starts next.
+Open **http://localhost:8080**.
 
-## Tech stack
+Your events are saved in the `openday-data` volume.
 
-| Part | Choice |
+## Commands
+
+| What | Command |
 | --- | --- |
-| Backend | Go |
-| Frontend | React (built with Vite) |
-| Database | SQLite |
-| Shipping | One Docker image (frontend embedded into the Go binary) |
+| Stop | `docker stop openday` |
+| Start again | `docker start openday` |
+| See logs | `docker logs openday` |
+| Delete the app (keeps your data) | `docker rm -f openday` |
+| Delete your data too | `docker volume rm openday-data` |
 
-## Contributing
+## Update
 
-Ideas and pull requests are welcome. AI coding agents should read [`AGENTS.md`](AGENTS.md) first.
+```bash
+git pull
+docker build -t openday .
+docker rm -f openday
+docker run -d --name openday -p 8080:8080 -v openday-data:/data --restart unless-stopped openday
+```
+
+Your data stays in the volume.
+
+## Features
+
+- Day, week, month and year views.
+- Click the calendar to add an event. Drag to pick a time range.
+- Drag events to move them. Drag the bottom edge to resize.
+- Events have a title, description and color. Events can overlap.
+- Right-click an event to change its color or delete it.
+- The event form can float or be docked to the side. On phones it slides up from the bottom.
+- Settings: date format, time format, time zone, default event length.
+- Light, dark or device theme.
+- Works on phones: tap to add or open, hold an event to drag it or open its menu, swipe to change the day/week/month.
+- Keyboard shortcuts: `D` `W` `M` `Y` (views), `T` (today), `J`/`K` (next/previous), `C` (create).
+
+## For developers
+
+Run the backend (Go) and the frontend (Vite) in two terminals:
+
+```bash
+cd backend && go run .
+```
+
+```bash
+cd frontend && npm install && npm run dev
+```
+
+Open http://localhost:5173. Run the backend tests with `cd backend && go test ./...`.
+
+AI coding agents should read [`AGENTS.md`](AGENTS.md) first.
 
 ## License
 
