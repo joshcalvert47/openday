@@ -65,7 +65,7 @@ export default function Header({
         <span className="brand">OpenDay</span>
       </div>
       <div className="header-nav">
-        <button className="outline-btn" onClick={onToday} title="Today (T)">
+        <button className="outline-btn today-btn" onClick={onToday} title="Today (T)">
           Today
         </button>
         <button className="icon-btn" aria-label={`Previous ${unit}`} title={`Previous ${unit}`} onClick={onPrev}>
@@ -81,7 +81,7 @@ export default function Header({
       </div>
       <div className="header-right">
         <button
-          className="icon-btn"
+          className="icon-btn settings-btn"
           aria-label="Settings menu"
           title="Settings menu"
           onClick={(e) => setGearMenu(rectOf(e.currentTarget))}

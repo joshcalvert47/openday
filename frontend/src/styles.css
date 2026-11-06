@@ -249,6 +249,33 @@ button {
   flex: none;
   padding: 8px 8px 16px 8px;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.sidebar .mini {
+  align-self: stretch;
+}
+.sidebar-settings {
+  display: none;
+  align-items: center;
+  gap: 16px;
+  align-self: stretch;
+  height: 48px;
+  margin-top: auto;
+  padding: 0 16px;
+  border: none;
+  border-radius: 24px;
+  background: transparent;
+  color: var(--text);
+  font-weight: 500;
+  text-align: left;
+}
+.sidebar-settings svg {
+  color: var(--text-2);
+}
+.sidebar-settings:hover {
+  background: var(--hover);
 }
 
 .create-btn {
@@ -1096,6 +1123,8 @@ select.field-btn option {
 body {
   /* No double-tap zoom delay on phones. */
   touch-action: manipulation;
+  /* We draw our own pressed state; hide the browser's blue tap flash. */
+  -webkit-tap-highlight-color: transparent;
 }
 .ev,
 .mv-ev {
@@ -1122,7 +1151,8 @@ body {
   .mv-date:not(.today):hover,
   .mv-ev:not(.draft):hover,
   .mv-more:hover,
-  .settings-nav-item:hover {
+  .settings-nav-item:hover,
+  .sidebar-settings:hover {
     background: transparent;
   }
   .create-btn:hover {
@@ -1213,6 +1243,16 @@ body {
 /* ---------- Phones ---------- */
 
 @media (max-width: 600px) {
+  /* Phones: no Today button (swipe or the mini month instead), and
+     settings live at the bottom of the sidebar. */
+  .header .today-btn,
+  .header .settings-btn {
+    display: none;
+  }
+  .sidebar-settings {
+    display: flex;
+  }
+
   /* iOS zooms into inputs with text smaller than 16px. */
   input,
   select,

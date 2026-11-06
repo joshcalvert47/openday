@@ -254,6 +254,13 @@ export default function App() {
     if (Math.abs(dx) > 60 && Math.abs(dx) > 2 * Math.abs(dy) && Date.now() - s0.time < 700) go(dx < 0 ? 1 : -1);
   };
 
+  const openSettings = () => {
+    setDraft(null);
+    closePopups();
+    setPhoneSidebar(false);
+    setPage('settings');
+  };
+
   const createFromButton = () => {
     if (narrow) setPhoneSidebar(false);
     const hour = new Date(nowWall).getUTCHours() + 1;
@@ -459,11 +466,7 @@ export default function App() {
         onPrev={() => go(-1)}
         onNext={() => go(1)}
         onView={setView}
-        onOpenSettings={() => {
-          setDraft(null);
-          closePopups();
-          setPage('settings');
-        }}
+        onOpenSettings={openSettings}
         onOpenAppearance={() => setAppearanceOpen(true)}
       />
       <div className="app-body">
@@ -478,6 +481,7 @@ export default function App() {
                 cursor={cursor}
                 today={today}
                 onCreate={createFromButton}
+                onOpenSettings={openSettings}
                 onPick={(d) => {
                   setCursor(d);
                   if (narrow) setPhoneSidebar(false);
