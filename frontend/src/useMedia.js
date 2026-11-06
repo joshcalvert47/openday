@@ -3,6 +3,8 @@ import { useEffect, useState } from 'react';
 // True while the CSS media query matches. Breakpoints match styles.css.
 export const NARROW = '(max-width: 900px)'; // tablets and phones
 export const PHONE = '(max-width: 600px)'; // phones
+// Touch-first devices (phones, tablets): tapping a field opens the on-screen keyboard.
+export const TOUCH = '(hover: none) and (pointer: coarse)';
 
 export function useMedia(query) {
   const [matches, setMatches] = useState(() => window.matchMedia?.(query).matches ?? false);

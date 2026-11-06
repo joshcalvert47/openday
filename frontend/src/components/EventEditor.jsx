@@ -7,6 +7,7 @@ import ColorPicker from './ColorPicker.jsx';
 import TimeInput from './TimeInput.jsx';
 import ReminderList from './ReminderList.jsx';
 import * as T from '../time.js';
+import { useMedia, TOUCH } from '../useMedia.js';
 
 // Form to create or edit an event. Shown as a floating card next to the event,
 // or docked as a panel on the right side of the calendar.
@@ -17,6 +18,7 @@ export default function EventEditor({
   const [picker, setPicker] = useState(false);
   const dateBtnRef = useRef(null);
   const isNew = !draft.id;
+  const touch = useMedia(TOUCH);
 
   // Close the date picker on a press outside it and its button.
   useEffect(() => {
@@ -29,9 +31,11 @@ export default function EventEditor({
     return () => document.removeEventListener('pointerdown', outside, true);
   }, [picker]);
 
+  // Put the cursor in the title. Not on touch devices: there the on-screen
+  // keyboard would pop up and cover half the screen before the user asks.
   useEffect(() => {
-    titleRef.current?.focus();
-  }, [draft.id, docked]);
+    if (!touch) titleRef.current?.focus();
+  }, [draft.id, docked]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const ws = T.toWall(draft.start, tz);
   const we = T.toWall(draft.end, tz);
@@ -174,7 +178,8 @@ export default function EventEditor({
   );
 
   // Phones: the form is a bottom sheet. Close (left) and Save (right) sit in
-  // the top bar, so the on-screen keyboard never hides Save.
+  // the top bar, so the on-screen keyboard never hides Save. No Delete here:
+  // it is in the details card and the long-press menu.
   if (sheet) {
     return (
       <Popover anchor={anchor} onClose={onClose} className="editor-popover" label={isNew ? 'New event' : 'Edit event'}>
@@ -185,13 +190,6 @@ export default function EventEditor({
             {saveButton}
           </div>
           {body}
-          {onDelete && (
-            <div className="editor-foot">
-              <button type="button" className="text-btn danger" onClick={onDelete}>
-                Delete
-              </button>
-            </div>
-          )}
         </form>
       </Popover>
     );
