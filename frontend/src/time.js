@@ -139,3 +139,40 @@ export function formatDuration(minutes) {
   const h = minutes / 60;
   return `${Number.isInteger(h) ? h : h.toFixed(1).replace(/\.0$/, '')} hr${h === 1 ? '' : 's'}`;
 }
+
+// Read a time the user typed: "9", "9am", "9:30", "930", "9.30 pm", "21:15".
+// Returns possible minutes of the day (earliest first), or null.
+// partial: the user is still typing, so "9:3" means 9:30 (for the list highlight).
+// In 12h format, "3" with no am/pm could be 3am or 3pm, so both are returned.
+export function parseTime(text, timeFormat, partial = false) {
+  let s = text.trim().toLowerCase().replace(/\s+/g, '');
+  let half = null;
+  const suffix = s.match(/([ap])\.?(m\.?)?$/);
+  if (suffix) {
+    half = suffix[1];
+    s = s.slice(0, suffix.index);
+  }
+  let h;
+  let m = 0;
+  const sep = s.match(/^(\d{1,2})[:.h](\d{0,2})$/);
+  if (sep) {
+    h = +sep[1];
+    m = sep[2] === '' ? 0 : partial && sep[2].length === 1 ? +sep[2] * 10 : +sep[2];
+  } else if (/^\d{1,4}$/.test(s)) {
+    if (s.length <= 2) h = +s;
+    else {
+      h = +s.slice(0, -2);
+      m = +s.slice(-2);
+    }
+  } else return null;
+  if (m > 59) return null;
+  if (half) {
+    if (h < 1 || h > 12) return null;
+    return [((h % 12) + (half === 'p' ? 12 : 0)) * 60 + m];
+  }
+  if (h > 23) return null;
+  if (timeFormat === '12h' && h >= 1 && h <= 12) {
+    return h === 12 ? [m, 12 * 60 + m] : [h * 60 + m, (h + 12) * 60 + m];
+  }
+  return [h * 60 + m];
+}

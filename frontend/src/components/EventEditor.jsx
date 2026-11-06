@@ -3,6 +3,7 @@ import Icon from '../icons.jsx';
 import Popover from './Popover.jsx';
 import MiniMonth from './MiniMonth.jsx';
 import ColorPicker from './ColorPicker.jsx';
+import TimeInput from './TimeInput.jsx';
 import * as T from '../time.js';
 
 // Form to create or edit an event. Shown as a floating card next to the event,
@@ -25,17 +26,39 @@ export default function EventEditor({
 
   const setWall = (newWs, newWe) => onChange({ start: T.fromWall(newWs, tz), end: T.fromWall(newWe, tz) });
 
+  const fmt = (t) => T.formatTime(t, tf, { compact: false });
+
   // Start time options: every 15 minutes of the day.
   const startOptions = [];
   for (let m = 0; m < 24 * 60; m += 15) startOptions.push(day + m * T.MINUTE);
-  if (!startOptions.includes(ws)) startOptions.push(ws);
-  startOptions.sort((a, b) => a - b);
+  const startList = startOptions.map((t) => ({ value: t, label: fmt(t), text: fmt(t) }));
 
   // End time options: up to 24 hours after the start, with the duration shown.
-  const endOptions = [];
-  for (let m = 15; m <= 24 * 60; m += 15) endOptions.push(ws + m * T.MINUTE);
-  if (!endOptions.includes(we)) endOptions.push(we);
-  endOptions.sort((a, b) => a - b);
+  const endList = [];
+  for (let m = 15; m <= 24 * 60; m += 15) {
+    const t = ws + m * T.MINUTE;
+    endList.push({ value: t, label: `${fmt(t)} (${T.formatDuration(m)})`, text: fmt(t) });
+  }
+
+  // Typed start time: on the same day. "3" in 12h format is 3am or 3pm,
+  // whichever is closer to the current start.
+  const resolveStart = (text, partial) => {
+    const c = T.parseTime(text, tf, partial);
+    if (!c) return null;
+    const ts = c.map((m) => day + m * T.MINUTE);
+    return ts.reduce((a, b) => (Math.abs(b - ws) < Math.abs(a - ws) ? b : a));
+  };
+  // Typed end time: the first such time after the start (can be the next day).
+  const resolveEnd = (text, partial) => {
+    const c = T.parseTime(text, tf, partial);
+    if (!c) return null;
+    const ts = c.map((m) => {
+      let t = day + m * T.MINUTE;
+      while (t <= ws) t += T.DAY;
+      return t;
+    });
+    return Math.min(...ts);
+  };
 
   const submit = (e) => {
     e.preventDefault();
@@ -75,34 +98,23 @@ export default function EventEditor({
             )}
           </div>
           <div className="time-fields">
-            <select
-              className="field-btn"
+            <TimeInput
               aria-label="Start time"
               value={ws}
-              onChange={(e) => {
-                const s = Number(e.target.value);
-                setWall(s, s + (we - ws));
-              }}
-            >
-              {startOptions.map((t) => (
-                <option key={t} value={t}>
-                  {T.formatTime(t, tf, { compact: false })}
-                </option>
-              ))}
-            </select>
+              options={startList}
+              resolve={resolveStart}
+              format={fmt}
+              onChange={(s) => setWall(s, s + (we - ws))}
+            />
             <span>–</span>
-            <select
-              className="field-btn"
+            <TimeInput
               aria-label="End time"
               value={we}
-              onChange={(e) => setWall(ws, Number(e.target.value))}
-            >
-              {endOptions.map((t) => (
-                <option key={t} value={t}>
-                  {T.formatTime(t, tf, { compact: false })} ({T.formatDuration(Math.round((t - ws) / T.MINUTE))})
-                </option>
-              ))}
-            </select>
+              options={endList}
+              resolve={resolveEnd}
+              format={fmt}
+              onChange={(e) => setWall(ws, e)}
+            />
           </div>
         </div>
       </div>
