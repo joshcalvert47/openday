@@ -46,6 +46,34 @@ CREATE TABLE IF NOT EXISTS settings (
 	key   TEXT PRIMARY KEY,
 	value TEXT NOT NULL
 );
+
+-- Server values that are not user settings (e.g. the Web Push keys).
+CREATE TABLE IF NOT EXISTS meta (
+	key   TEXT PRIMARY KEY,
+	value TEXT NOT NULL
+);
+
+-- Browsers that receive Web Push notifications.
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+	endpoint   TEXT PRIMARY KEY,
+	p256dh     TEXT NOT NULL,
+	auth       TEXT NOT NULL,
+	created_at INTEGER NOT NULL
+);
+
+-- Reminders the server already pushed (so each one is sent once).
+CREATE TABLE IF NOT EXISTS push_sent (
+	key     TEXT PRIMARY KEY,
+	sent_at INTEGER NOT NULL
+);
+
+-- Snoozed notifications, shown again at at_ms.
+CREATE TABLE IF NOT EXISTS push_snoozes (
+	key         TEXT PRIMARY KEY,
+	at_ms       INTEGER NOT NULL,
+	event_id    INTEGER NOT NULL,
+	event_start INTEGER NOT NULL
+);
 `
 
 // OpenStore opens (or creates) the database file and makes sure the tables exist.

@@ -28,6 +28,11 @@ func main() {
 	}
 	defer store.Close()
 
+	// Send reminders with Web Push, so they show even when no tab is open.
+	pushCtx, stopPush := context.WithCancel(context.Background())
+	defer stopPush()
+	go NewNotifier(store, envOr("OPENDAY_PUSH_CONTACT", "https://github.com/nikolozlortki/openday")).Run(pushCtx)
+
 	mux := http.NewServeMux()
 	NewAPI(store).Register(mux)
 	mux.Handle("/", frontendHandler())
@@ -50,6 +55,7 @@ func main() {
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	<-stop
 	log.Print("shutting down")
+	stopPush()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(ctx); err != nil {

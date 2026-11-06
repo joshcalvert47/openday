@@ -17,7 +17,8 @@ RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /openday .
 
 # 3. Small final image: just the binary.
 FROM alpine:3.22
-RUN adduser -D -H -u 1000 openday && mkdir /data && chown openday:openday /data
+# CA certificates: Web Push calls the browsers' push services over HTTPS.
+RUN apk add --no-cache ca-certificates && adduser -D -H -u 1000 openday && mkdir /data && chown openday:openday /data
 COPY --from=backend /openday /usr/local/bin/openday
 USER openday
 ENV OPENDAY_ADDR=:8080 \

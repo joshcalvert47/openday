@@ -4,7 +4,12 @@
 //   and shows them as desktop notifications or as an alert in the page.
 // - Desktop notifications have a "Snooze" button. A snoozed notification shows
 //   again "snoozeBefore" minutes before the event.
-// Nothing is sent by the server, so notifications only show while a tab is open.
+// - Web Push: when desktop notifications are allowed, this browser subscribes
+//   to the server's push. The server then sends due reminders itself, so they
+//   show even when no tab is open (backend/push.go, public/sw.js).
+//   The tab is the fallback: it waits PUSH_GRACE after a reminder is due, asks
+//   the server if it was pushed, and shows it itself if not (no internet on the
+//   server, plain HTTP, browser without push...).
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from './api.js';
@@ -21,6 +26,7 @@ const REFETCH_EVERY = 5 * T.MINUTE;
 const FETCH_AHEAD = 29 * T.DAY; // longest reminder is 4 weeks
 const LATE_LIMIT = 10 * T.MINUTE; // don't show reminders that are older than this (tab was closed, computer asleep)
 const SNOOZE_LATER = 5 * T.MINUTE; // when the snooze time has already passed
+const PUSH_GRACE = 45 * 1000; // the server checks every 15 seconds
 
 function readStore(key, initial) {
   try {
@@ -56,17 +62,72 @@ export async function requestNotificationPermission() {
   }
 }
 
-let swRegistration = null;
-function registerServiceWorker() {
-  if (!('serviceWorker' in navigator) || !window.isSecureContext) return;
-  navigator.serviceWorker.register('/sw.js').then(
-    (reg) => {
-      swRegistration = reg;
+// ---- Web Push ----
+
+let pushActive = false; // this browser is subscribed to the server's push
+let pushTried = false; // ensurePush finished at least once (until then, wait)
+
+function keyBytes(base64url) {
+  const b64 = base64url.replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(b64 + '='.repeat((4 - (b64.length % 4)) % 4));
+  return Uint8Array.from(raw, (c) => c.charCodeAt(0));
+}
+
+function sameBytes(a, b) {
+  if (!a || !b) return false;
+  const x = new Uint8Array(a);
+  return x.length === b.length && x.every((v, i) => v === b[i]);
+}
+
+// Subscribe this browser to push and tell the server. Safe to call often.
+let pushing = null;
+export function ensurePush() {
+  if (pushing) return pushing;
+  pushing = (async () => {
+    if (notificationPermission() !== 'granted') return false;
+    const reg = await registerServiceWorker();
+    if (!reg?.pushManager) return false;
+    const key = keyBytes(await api.pushKey());
+    let sub = await reg.pushManager.getSubscription();
+    if (sub && !sameBytes(sub.options?.applicationServerKey, key)) {
+      // The server has new keys (e.g. a new database): subscribe again.
+      await sub.unsubscribe();
+      sub = null;
+    }
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+    await api.savePushSubscription(sub.toJSON());
+    return true;
+  })().then(
+    (ok) => {
+      pushActive = ok;
+      pushTried = true;
+      pushing = null;
+      return ok;
     },
     () => {
-      /* no service worker: notifications have no Snooze button */
+      pushActive = false;
+      pushTried = true;
+      pushing = null;
+      return false;
     },
   );
+  return pushing;
+}
+
+// Resolves to the service worker registration, or null if there is none
+// (then notifications have no Snooze button).
+let swReady = null;
+function registerServiceWorker() {
+  if (swReady) return swReady;
+  if (!('serviceWorker' in navigator) || !window.isSecureContext) {
+    swReady = Promise.resolve(null);
+  } else {
+    swReady = navigator.serviceWorker
+      .register('/sw.js')
+      .then(() => navigator.serviceWorker.ready)
+      .catch(() => null);
+  }
+  return swReady;
 }
 
 // ---- Sound ----
@@ -114,10 +175,11 @@ async function showDesktop(item, body) {
     tag: item.key,
     icon: '/logo.svg',
     silent: true, // the page plays its own sound (if turned on)
-    data: { key: item.key, event },
+    data: { key: item.key, event, snoozeBefore: item.snoozeBefore },
   };
-  if (swRegistration) {
-    await swRegistration.showNotification(title, {
+  const reg = await registerServiceWorker();
+  if (reg) {
+    await reg.showNotification(title, {
       ...options,
       actions: [{ action: 'snooze', title: 'Snooze' }],
     });
@@ -141,6 +203,7 @@ export function useNotifications({ settings, describe, changeKey }) {
   const [alerts, setAlerts] = useState([]); // in-page alerts: [{ key, event }]
   const upcoming = useRef([]);
   const shownHere = useRef(new Set());
+  const asking = useRef(new Set()); // keys we are asking the server about
   const latest = useRef(null);
   latest.current = { settings, describe };
 
@@ -170,25 +233,56 @@ export function useNotifications({ settings, describe, changeKey }) {
     }
   };
 
+  // With push, the server shows desktop notifications. The tab only steps in
+  // when the server did not push one shortly after it was due.
+  const showUnlessPushed = (item, now) => {
+    if (now - item.at < PUSH_GRACE || asking.current.has(item.key) || shownHere.current.has(item.key)) return;
+    asking.current.add(item.key);
+    api.pushSent(item.key).then(
+      (sent) => {
+        asking.current.delete(item.key);
+        if (sent) shownHere.current.add(item.key);
+        else if (claim(item.key)) show(item);
+      },
+      () => {
+        asking.current.delete(item.key);
+        if (claim(item.key)) show(item); // server not reachable: show it here
+      },
+    );
+  };
+
   const tick = () => {
-    if (latest.current.settings.notifications === 'off') return;
+    const s = latest.current.settings;
+    if (s.notifications === 'off') return;
     const now = Date.now();
     const due = [];
+    const snoozeBefore = s.snoozeBefore;
     for (const e of upcoming.current) {
       for (const m of e.reminders || []) {
         const at = e.start - m * T.MINUTE;
         if (at <= now && now - at < LATE_LIMIT && now < e.end) {
-          due.push({ key: `${e.id}:${e.start}:${m}`, event: slim(e) });
+          due.push({ key: `${e.id}:${e.start}:${m}`, at, event: slim(e), snoozeBefore });
         }
       }
     }
     const snoozed = readStore(SNOOZED_KEY, []);
-    const waiting = snoozed.filter((s) => s.at > now);
-    for (const s of snoozed) {
-      if (s.at <= now && now < s.event.end) due.push({ key: `${s.key}:snooze:${s.at}`, event: s.event });
+    // Keep due snoozes a little longer, while the tab waits for the server's push.
+    const keep = snoozed.filter((x) => now - x.at < LATE_LIMIT && now < x.event.end);
+    for (const x of keep) {
+      if (x.at <= now) due.push({ key: `${x.key}:snooze:${x.at}`, at: x.at, event: x.event, snoozeBefore });
     }
-    if (waiting.length !== snoozed.length) writeStore(SNOOZED_KEY, waiting);
-    for (const item of due) if (claim(item.key)) show(item);
+    if (keep.length !== snoozed.length) writeStore(SNOOZED_KEY, keep);
+    const desktop = s.notifications === 'desktop' && notificationPermission() === 'granted';
+    // Push setup still running: wait, so the tab and the server don't both show it.
+    if (desktop && !pushTried) {
+      ensurePush();
+      return;
+    }
+    const viaPush = desktop && pushActive;
+    for (const item of due) {
+      if (viaPush) showUnlessPushed(item, now);
+      else if (claim(item.key)) show(item);
+    }
   };
   const tickRef = useRef(tick);
   tickRef.current = tick;
@@ -197,8 +291,11 @@ export function useNotifications({ settings, describe, changeKey }) {
     if (!data?.event) return;
     const { event, key } = data;
     const now = Date.now();
-    let at = event.start - latest.current.settings.snoozeBefore * T.MINUTE;
-    if (at <= now) at = now + SNOOZE_LATER;
+    let at = data.at; // set by the service worker, so the server uses the same time
+    if (!at) {
+      at = event.start - latest.current.settings.snoozeBefore * T.MINUTE;
+      if (at <= now) at = now + SNOOZE_LATER;
+    }
     const list = readStore(SNOOZED_KEY, []).filter((s) => s.key !== key);
     list.push({ key, at, event });
     writeStore(SNOOZED_KEY, list);
@@ -239,12 +336,17 @@ export function useNotifications({ settings, describe, changeKey }) {
       );
     };
     load();
-    const id = setInterval(load, REFETCH_EVERY);
+    if (settings.notifications === 'desktop') ensurePush();
+    const id = setInterval(() => {
+      load();
+      if (latest.current.settings.notifications === 'desktop' && !pushActive) ensurePush();
+    }, REFETCH_EVERY);
     return () => {
       cancelled = true;
       clearInterval(id);
     };
-  }, [off, changeKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [off, changeKey, settings.notifications]);
 
   useEffect(() => {
     if (off) return undefined;

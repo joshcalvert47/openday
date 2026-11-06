@@ -51,22 +51,32 @@ Smaller decisions (made in the first version; change them only after asking the 
 | Icons | Inline SVG paths in `frontend/src/icons.jsx` (Material Design icon shapes, Apache 2.0). |
 | Time zones | Browser `Intl` API (`frontend/src/time.js`). Go embeds `time/tzdata`. |
 | Final Docker image | `alpine`, runs as a non-root user, data in `/data`. |
+| Web Push | `github.com/SherClockHolmes/webpush-go` (encryption + VAPID). Server keys are made on first use and kept in the `meta` table. |
 
 How the app works:
 
 - API lives under `/api` (`backend/api.go`): `GET/POST /api/events`, `PUT/DELETE /api/events/{id}`, `GET/PUT /api/settings`, `GET /api/health`.
+  Web Push (`backend/push.go`): `GET /api/push/key`, `POST /api/push/subscriptions`, `POST /api/push/snooze`, `GET /api/push/sent?key=`.
 - Events are stored as UTC Unix milliseconds. The frontend shows them in the time zone from settings.
 - Settings (date format, time format, time zone, default duration, default notification, notification settings, theme) are stored in the database, so they follow the user across browsers.
 - Notifications (`frontend/src/notifications.js`):
   - Each event has `reminders`: up to 5 times in minutes before the start (0 to 4 weeks). Stored as a JSON array in the `reminders` column (added by `migrate` in `store.go` for older databases).
   - New events get the "Default notification" from settings.
   - In the event form, each notification is a number field plus a unit drop-down (minutes, hours, days, weeks), like the classic calendar (`ReminderList.jsx`). The value is stored in minutes, so the unit is not saved: a reopened event shows the largest unit that fits ("60 minutes" comes back as "1 hour"). Numbers outside 0 to 4 weeks are marked red and not saved; leaving the field puts back the last good value. Changing the unit keeps the number (capped at 4 weeks).
-  - The page checks every 10 seconds which reminders are due. There is no server push, so a calendar tab must be open. Reminders more than 10 minutes late are skipped.
+  - Reminders work with the tab closed, using Web Push (option C: push, with the open tab as a fallback):
+    - When desktop notifications are allowed, the browser subscribes to push and sends the subscription to the server (`ensurePush` in `notifications.js`).
+    - The Go server checks every 15 seconds (`Notifier` in `backend/push.go`, started in `main.go`). Only in "Desktop notifications" mode. It sends due reminders to every subscribed browser and records them in `push_sent`. A subscription answered with 404/410 is removed. A failed send is not recorded and is tried again.
+    - The service worker (`public/sw.js`) shows pushed reminders. It formats the date itself, because the server does not know the browser's time zone.
+    - The open tab also checks every 10 seconds. With push active it waits 45 seconds, asks `GET /api/push/sent`, and shows the reminder only if the server did not push it (no internet on the server, plain HTTP, browser without push). Without push (or in Alerts mode) it shows reminders right away, as before. While push setup is still running, it waits.
+    - Reminder keys are the same on both sides: `eventId:startMs:minutes`, and `<key>:snooze:<atMs>` for snoozes.
+    - Reminders more than 10 minutes late are skipped (push messages also expire after 10 minutes).
+    - Needs HTTPS (or `localhost`) and outbound internet from the server to the browsers' push services. iPhone/iPad: only for a site added to the Home Screen.
   - "Notifications" setting: Off, Desktop notifications (browser `Notification` API), or Alerts (dialog in the page). If the browser blocks desktop notifications, alerts are used instead.
-  - Desktop notifications are shown by a small service worker (`frontend/public/sw.js`) so they can have a Snooze button. A snoozed notification shows again "Show snoozed notifications" minutes before the event (or 5 minutes later if that time has passed).
-  - "Play notification sounds": a short chime made with Web Audio (no sound file).
+  - Desktop notifications are shown by the service worker (`frontend/public/sw.js`) so they can have a Snooze button. A snoozed notification shows again "Show snoozed notifications" minutes before the event (or 5 minutes later if that time has passed). The service worker sends the snooze to the server (`POST /api/push/snooze`, table `push_snoozes`) and to open tabs.
+  - "Play notification sounds": the tab plays a short chime made with Web Audio (no sound file). Pushed notifications use the system sound instead (`silent: false`).
   - Shown reminders and snoozes are kept in `localStorage`, so a reminder shows once even with several tabs open or after a reload.
-  - Desktop notifications need HTTPS or `localhost` (browser rule). Headless Chromium always denies them, so tests stub `Notification.permission` and `showNotification`.
+  - Desktop notifications need HTTPS or `localhost` (browser rule).
+  - Testing: Playwright's default headless shell denies notifications. `chromium.launch({ channel: 'chromium' })` (new headless) allows them but cannot subscribe to a real push service, so stub `PushManager.prototype.subscribe`, and deliver test pushes with the DevTools command `ServiceWorker.deliverPushMessage`. Go tests use a fake push service (`backend/push_test.go`).
 - Small per-browser preferences (current view, sidebar open) are kept in `localStorage`.
 - Drop-downs: no browser `<select>`. Use `Select.jsx` (styled list, keyboard and type-ahead). Long lists (time zones) use `SearchSelect.jsx`: type to search, the list scrolls to the best match in real time (nothing is hidden). Lists are drawn by `DropdownList.jsx` in `document.body` and follow their field (e.g. when the form is dragged).
 - Event times use `TimeInput.jsx`: pick from the list or type any time ("9", "930", "9:30pm", "21:15"). While typing, the list scrolls to the closest option. Typed text is read by `parseTime` in `time.js`. In 12h format, a time without am/pm picks the one closest to the current start (start field) or the first one after the start (end field).
@@ -79,7 +89,7 @@ How the app works:
   - Tap = click. Long press on an event = drag it, or open its menu if the finger does not move. Swipe left/right = next/previous period.
   - After a finger tap opens a card, the "ghost" click from the browser is cancelled (see `eatGhostClick` in `TimeGrid.jsx`).
   - Test with Playwright device emulation (e.g. `devices['Pixel 7']`) and touch events.
-- Environment variables: `OPENDAY_ADDR` (default `:8080`), `OPENDAY_DB` (default `openday.db`; `/data/openday.db` in Docker).
+- Environment variables: `OPENDAY_ADDR` (default `:8080`), `OPENDAY_DB` (default `openday.db`; `/data/openday.db` in Docker), `OPENDAY_PUSH_CONTACT` (contact sent to push services: an `https://` URL or e-mail; default is the project's GitHub page).
 
 ## Folder layout
 
