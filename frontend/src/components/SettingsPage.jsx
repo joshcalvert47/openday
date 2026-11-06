@@ -48,7 +48,7 @@ function Field({ label, children }) {
   );
 }
 
-export default function SettingsPage({ settings, onChange, onBack }) {
+export default function SettingsPage({ settings, onChange, onBack, showShortcuts, onViewShortcuts }) {
   const zoneOptions = useMemo(
     () => [
       { value: '', label: `Device time zone (${T.browserTimeZone()})` },
@@ -75,6 +75,9 @@ export default function SettingsPage({ settings, onChange, onBack }) {
           <a href="#general" className="settings-nav-item">General</a>
           <a href="#notifications" className="settings-nav-item">Notification settings</a>
           <a href="#appearance" className="settings-nav-item">Appearance</a>
+          {showShortcuts && (
+            <a href="#shortcuts" className="settings-nav-item">Keyboard shortcuts</a>
+          )}
         </nav>
         <div className="settings-content">
           <section id="general">
@@ -178,6 +181,30 @@ export default function SettingsPage({ settings, onChange, onBack }) {
               <p className="settings-note">Your device is set to reduce motion, so animations are not shown.</p>
             )}
           </section>
+
+          {showShortcuts && (
+            <section id="shortcuts">
+              <h2>Keyboard shortcuts</h2>
+              <label className="checkbox">
+                <input
+                  type="checkbox"
+                  checked={settings.keyboardShortcuts}
+                  onChange={(e) => onChange({ keyboardShortcuts: e.target.checked })}
+                />
+                <span>Enable keyboard shortcuts</span>
+              </label>
+              <p className="settings-note">
+                {settings.keyboardShortcuts ? (
+                  <>Press <kbd>?</kbd> in the calendar to see the list of shortcuts.</>
+                ) : (
+                  'Single-key shortcuts like D, W and C are off. Esc still closes things.'
+                )}{' '}
+                <button type="button" className="text-btn inline" onClick={onViewShortcuts}>
+                  View shortcuts
+                </button>
+              </p>
+            </section>
+          )}
         </div>
       </div>
     </div>
