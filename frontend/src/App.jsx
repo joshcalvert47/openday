@@ -418,11 +418,13 @@ export default function App() {
         onOpenAppearance={() => setAppearanceOpen(true)}
       />
       <div className="app-body">
-        {sidebarOpen && (
-          <Sidebar cursor={cursor} today={today} onCreate={createFromButton} onPick={setCursor} />
+        {/* Docked form takes the sidebar's place on the left, like the classic calendar. */}
+        {docked && editor ? (
+          <aside className="dock">{editor}</aside>
+        ) : (
+          sidebarOpen && <Sidebar cursor={cursor} today={today} onCreate={createFromButton} onPick={setCursor} />
         )}
         <main className="main">{main}</main>
-        {docked && editor && <aside className="dock">{editor}</aside>}
       </div>
 
       {!docked && editor}

@@ -45,8 +45,6 @@ export default function EventEditor({
   const form = (
     <form className={`editor ${docked ? 'docked' : ''}`} onSubmit={submit}>
       <div className="editor-bar">
-        {docked && <span className="editor-bar-title">{isNew ? 'New event' : 'Edit event'}</span>}
-        <span className="spacer" />
         <button
           type="button"
           className="icon-btn sm"
@@ -54,8 +52,10 @@ export default function EventEditor({
           aria-label={docked ? 'Undock from side panel' : 'Dock to side panel'}
           title={docked ? 'Undock from side panel' : 'Dock to side panel'}
         >
-          <Icon name={docked ? 'popOut' : 'dockRight'} size={20} />
+          <Icon name={docked ? 'popOut' : 'dockLeft'} size={20} />
         </button>
+        {docked && <span className="editor-bar-title">{isNew ? 'New event' : 'Edit event'}</span>}
+        <span className="spacer" />
         <button type="button" className="icon-btn sm" onClick={onClose} aria-label="Close" title="Close">
           <Icon name="close" size={20} />
         </button>
