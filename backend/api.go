@@ -192,6 +192,8 @@ type Settings struct {
 	DefaultReminder int `json:"defaultReminder"`
 	// Animations: play opening and closing animations (sidebar, cards, dialogs).
 	Animations bool `json:"animations"`
+	// KeyboardShortcuts: single-key shortcuts (D, W, C, ?...) are on.
+	KeyboardShortcuts bool `json:"keyboardShortcuts"`
 }
 
 var defaultSettings = Settings{
@@ -206,7 +208,8 @@ var defaultSettings = Settings{
 	NotificationSound: true,
 	DefaultReminder:   30,
 
-	Animations: true,
+	Animations:        true,
+	KeyboardShortcuts: true,
 }
 
 var (
@@ -270,6 +273,9 @@ func (a *API) loadSettings() (Settings, error) {
 	if v, ok := raw["animations"]; ok {
 		s.Animations = v == "true"
 	}
+	if v, ok := raw["keyboardShortcuts"]; ok {
+		s.KeyboardShortcuts = v == "true"
+	}
 	return s, nil
 }
 
@@ -296,7 +302,8 @@ func (a *API) putSettings(w http.ResponseWriter, r *http.Request) {
 		NotificationSound *bool   `json:"notificationSound"`
 		DefaultReminder   *int    `json:"defaultReminder"`
 
-		Animations *bool `json:"animations"`
+		Animations        *bool `json:"animations"`
+		KeyboardShortcuts *bool `json:"keyboardShortcuts"`
 	}
 	if !readJSON(w, r, &in) {
 		return
@@ -365,6 +372,9 @@ func (a *API) putSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	if in.Animations != nil {
 		values["animations"] = strconv.FormatBool(*in.Animations)
+	}
+	if in.KeyboardShortcuts != nil {
+		values["keyboardShortcuts"] = strconv.FormatBool(*in.KeyboardShortcuts)
 	}
 	if err := a.store.SetSettings(values); err != nil {
 		serverError(w, err)

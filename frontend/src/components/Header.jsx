@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import Icon from '../icons.jsx';
 import * as T from '../time.js';
+import { withKey } from '../shortcuts.js';
 
 const VIEW_ITEMS = [
   { id: 'day', label: 'Day', key: 'D' },
@@ -49,7 +50,8 @@ function Menu({ anchor, alignRight, onClose, children }) {
 }
 
 export default function Header({
-  view, cursor, onToggleSidebar, onToday, onPrev, onNext, onView, onOpenSettings, onOpenAppearance,
+  view, cursor, onToggleSidebar, onToday, onPrev, onNext, onView, onOpenSettings, onOpenAppearance, onOpenShortcuts,
+  shortcuts,
 }) {
   const [viewMenu, setViewMenu] = useState(null);
   const [gearMenu, setGearMenu] = useState(null);
@@ -65,13 +67,13 @@ export default function Header({
         <span className="brand">OpenDay</span>
       </div>
       <div className="header-nav">
-        <button className="outline-btn today-btn" onClick={onToday} title="Today (T)">
+        <button className="outline-btn today-btn" onClick={onToday} title={withKey('Today', 'T', shortcuts)}>
           Today
         </button>
-        <button className="icon-btn" aria-label={`Previous ${unit}`} title={`Previous ${unit}`} onClick={onPrev}>
+        <button className="icon-btn" aria-label={`Previous ${unit}`} title={withKey(`Previous ${unit}`, 'K', shortcuts)} onClick={onPrev}>
           <Icon name="chevronLeft" />
         </button>
-        <button className="icon-btn" aria-label={`Next ${unit}`} title={`Next ${unit}`} onClick={onNext}>
+        <button className="icon-btn" aria-label={`Next ${unit}`} title={withKey(`Next ${unit}`, 'J', shortcuts)} onClick={onNext}>
           <Icon name="chevronRight" />
         </button>
         <h1 className="header-title">
@@ -107,7 +109,7 @@ export default function Header({
               }}
             >
               <span>{v.label}</span>
-              <span className="menu-key">{v.key}</span>
+              {shortcuts && <span className="menu-key">{v.key}</span>}
             </button>
           ))}
         </Menu>
@@ -134,6 +136,18 @@ export default function Header({
           >
             Appearance
           </button>
+          {onOpenShortcuts && (
+            <button
+              role="menuitem"
+              className="menu-item"
+              onClick={() => {
+                setGearMenu(null);
+                onOpenShortcuts();
+              }}
+            >
+              Keyboard shortcuts
+            </button>
+          )}
         </Menu>
       )}
     </header>

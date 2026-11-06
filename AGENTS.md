@@ -56,7 +56,7 @@ How the app works:
 
 - API lives under `/api` (`backend/api.go`): `GET/POST /api/events`, `PUT/DELETE /api/events/{id}`, `GET/PUT /api/settings`, `GET /api/health`.
 - Events are stored as UTC Unix milliseconds. The frontend shows them in the time zone from settings.
-- Settings (date format, time format, time zone, default duration, default notification, notification settings, theme, animations) are stored in the database, so they follow the user across browsers.
+- Settings (date format, time format, time zone, default duration, default notification, notification settings, theme, animations, keyboard shortcuts) are stored in the database, so they follow the user across browsers.
 - Notifications (`frontend/src/notifications.js`):
   - Each event has `reminders`: up to 5 times in minutes before the start (0 to 4 weeks). Stored as a JSON array in the `reminders` column (added by `migrate` in `store.go` for older databases).
   - New events get the "Default notification" from settings.
@@ -86,6 +86,12 @@ How the app works:
   - Tap = click. Long press on an event = drag it, or open its menu if the finger does not move. Swipe left/right = next/previous period.
   - After a finger tap opens a card, the "ghost" click from the browser is cancelled (see `eatGhostClick` in `TimeGrid.jsx`).
   - Test with Playwright device emulation (e.g. `devices['Pixel 7']`) and touch events.
+- Keyboard shortcuts (like the classic calendar):
+  - Keys are handled in `App.jsx` (`keyHandler`). The list shown to the user is `SHORTCUT_GROUPS` in `frontend/src/shortcuts.js`; keep both in sync.
+  - `?` (or Settings menu → Keyboard shortcuts) opens `ShortcutsDialog.jsx`.
+  - Setting "Enable keyboard shortcuts" (Settings → Keyboard shortcuts, stored as `keyboardShortcuts`, on by default). Off: only `Esc` works, and tooltips/menus show no keys.
+  - When on, tooltips show the key ("Next week (J)", "Create (C)") and the view menu shows D/W/M/Y.
+  - Phones and touch devices: no key hints, no dialog, no settings section.
 - Environment variables: `OPENDAY_ADDR` (default `:8080`), `OPENDAY_DB` (default `openday.db`; `/data/openday.db` in Docker).
 
 ## Folder layout
