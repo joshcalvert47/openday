@@ -1,5 +1,7 @@
 import { useMemo } from 'react';
 import Icon from '../icons.jsx';
+import Select from './Select.jsx';
+import SearchSelect from './SearchSelect.jsx';
 import { ThemeOptions } from './AppearanceDialog.jsx';
 import * as T from '../time.js';
 
@@ -15,7 +17,13 @@ function Field({ label, children }) {
 }
 
 export default function SettingsPage({ settings, onChange, onBack }) {
-  const zones = useMemo(() => T.allTimeZones(), []);
+  const zoneOptions = useMemo(
+    () => [
+      { value: '', label: `Device time zone (${T.browserTimeZone()})` },
+      ...T.allTimeZones().map((z) => ({ value: z, label: z.replace(/_/g, ' ') })),
+    ],
+    [],
+  );
   const sample = T.makeDay(2026, 11, 31) + 13 * T.HOUR;
 
   return (
@@ -39,45 +47,35 @@ export default function SettingsPage({ settings, onChange, onBack }) {
 
             <h3>Date and time format</h3>
             <Field label="Date format">
-              <select value={settings.dateFormat} onChange={(e) => onChange({ dateFormat: e.target.value })}>
-                {['MDY', 'DMY', 'YMD'].map((f) => (
-                  <option key={f} value={f}>
-                    {T.formatDate(sample, f)}
-                  </option>
-                ))}
-              </select>
+              <Select
+                value={settings.dateFormat}
+                onChange={(dateFormat) => onChange({ dateFormat })}
+                options={['MDY', 'DMY', 'YMD'].map((f) => ({ value: f, label: T.formatDate(sample, f) }))}
+              />
             </Field>
             <Field label="Time format">
-              <select value={settings.timeFormat} onChange={(e) => onChange({ timeFormat: e.target.value })}>
-                <option value="12h">{T.formatTime(sample, '12h')}</option>
-                <option value="24h">{T.formatTime(sample, '24h')}</option>
-              </select>
+              <Select
+                value={settings.timeFormat}
+                onChange={(timeFormat) => onChange({ timeFormat })}
+                options={['12h', '24h'].map((f) => ({ value: f, label: T.formatTime(sample, f) }))}
+              />
             </Field>
 
             <h3>Time zone</h3>
             <Field label="Primary time zone">
-              <select value={settings.timeZone} onChange={(e) => onChange({ timeZone: e.target.value })}>
-                <option value="">Device time zone ({T.browserTimeZone()})</option>
-                {zones.map((z) => (
-                  <option key={z} value={z}>
-                    {z.replace(/_/g, ' ')}
-                  </option>
-                ))}
-              </select>
+              <SearchSelect value={settings.timeZone} onChange={(timeZone) => onChange({ timeZone })} options={zoneOptions} />
             </Field>
 
             <h3>Event settings</h3>
             <Field label="Default duration">
-              <select
+              <Select
                 value={settings.defaultDuration}
-                onChange={(e) => onChange({ defaultDuration: Number(e.target.value) })}
-              >
-                {DURATIONS.map((d) => (
-                  <option key={d} value={d}>
-                    {d < 60 ? `${d} minutes` : T.formatDuration(d).replace('hr', 'hour')}
-                  </option>
-                ))}
-              </select>
+                onChange={(defaultDuration) => onChange({ defaultDuration })}
+                options={DURATIONS.map((d) => ({
+                  value: d,
+                  label: d < 60 ? `${d} minutes` : T.formatDuration(d).replace('hr', 'hour'),
+                }))}
+              />
             </Field>
           </section>
 
