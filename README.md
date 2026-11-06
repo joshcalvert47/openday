@@ -28,6 +28,12 @@
   <img src="assets/screenshots/week.png" alt="OpenDay week view with several calendars and two time zones" width="900">
 </p>
 
+> [!WARNING]
+> **OpenDay is in early development.** Things may change between updates. Back up your data.
+>
+> - **There is no login yet.** Anyone who can open the page can see and change your events. Run it only on your own computer or a private network.
+> - Not done yet: repeating events, guests and sharing, import/export, phone sync (CalDAV).
+
 ## 📸 Screenshots
 
 <table>
@@ -52,7 +58,7 @@
 You need [Docker](https://docs.docker.com/get-docker/).
 
 ```bash
-git clone https://github.com/nikolozlortki/openday.git
+git clone https://github.com/lortkipa/openday.git
 cd openday
 docker build -t openday .
 docker run -d --name openday -p 8080:8080 -v openday-data:/data --restart unless-stopped openday
