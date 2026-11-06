@@ -11,8 +11,24 @@ export default function EventEditor({
   draft, settings, tz, today, docked, sheet, anchor, onChange, onSave, onClose, onDelete, onToggleDock,
 }) {
   const titleRef = useRef(null);
-  const [picker, setPicker] = useState(false);
+  const [picker, setPicker] = useState(null); // fixed position of the date picker, or null when closed
   const isNew = !draft.id;
+
+  // The picker uses fixed positioning so the scrolling form does not crop it.
+  // Close it when anything scrolls or the window resizes, so it never floats away from its button.
+  useEffect(() => {
+    if (!picker) return;
+    const close = (e) => {
+      if (e.target?.closest?.('.date-picker')) return;
+      setPicker(null);
+    };
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    return () => {
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
+    };
+  }, [picker]);
 
   useEffect(() => {
     titleRef.current?.focus();
@@ -58,16 +74,16 @@ export default function EventEditor({
         <Icon name="schedule" className="row-icon" size={20} />
         <div className="editor-when">
           <div className="date-field">
-            <button type="button" className="field-btn" onClick={() => setPicker(!picker)} aria-label="Date">
+            <button type="button" className="field-btn" onClick={(e) => setPicker(picker ? null : pickerPos(e.currentTarget))} aria-label="Date">
               {T.weekdayName(ws)}, {T.formatDate(ws, settings.dateFormat)}
             </button>
             {picker && (
-              <div className="date-picker" data-popover>
+              <div className="date-picker" data-popover style={picker}>
                 <MiniMonth
                   value={day}
                   today={today}
                   onPick={(d) => {
-                    setPicker(false);
+                    setPicker(null);
                     setWall(d + (ws - day), d + (we - day));
                   }}
                 />
@@ -200,4 +216,19 @@ export default function EventEditor({
       {form}
     </Popover>
   );
+}
+
+// Place the date picker below its button, or above it when there is no room below.
+// Keep it inside the window.
+const PICKER_W = 248;
+const PICKER_H = 300;
+function pickerPos(btn) {
+  const r = btn.getBoundingClientRect();
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  let top = r.bottom + 4;
+  if (top + PICKER_H > vh - 8 && r.top - 4 - PICKER_H >= 8) top = r.top - 4 - PICKER_H;
+  top = Math.max(8, Math.min(top, vh - 8 - PICKER_H));
+  const left = Math.max(8, Math.min(r.left, vw - 8 - PICKER_W));
+  return { top, left };
 }

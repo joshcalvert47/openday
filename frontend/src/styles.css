@@ -874,10 +874,8 @@ select.field-btn option {
   position: relative;
 }
 .date-picker {
-  position: absolute;
-  top: 36px;
-  left: 0;
-  z-index: 10;
+  position: fixed;
+  z-index: 1000;
   width: 248px;
   padding: 8px 0;
   background: var(--surface);
