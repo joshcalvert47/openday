@@ -24,9 +24,27 @@ The project is at the very start. There is no code yet.
 | Backend | Go |
 | Frontend | React |
 | Database | SQLite |
-| Shipping | One Docker image (backend serves the built frontend) |
+| Frontend build tool | Vite |
+| Shipping | One Docker image |
+| Frontend in the image | Built by Vite, then embedded into the Go binary (Go `embed`) |
 
-Why: easy to self-host. One container, one database file, low memory use.
+Why: easy to self-host. One container, one binary, one database file, low memory use.
+
+## Folder layout
+
+One repository, two main folders:
+
+```
+openday/
+├── backend/     # Go code (API + serves the embedded frontend)
+├── frontend/    # React app (Vite)
+├── Dockerfile   # builds frontend, then backend, into one image
+├── AGENTS.md
+└── CLAUDE.md
+```
+
+- The Dockerfile builds the frontend first, then the Go binary that embeds it.
+- The final image only needs the Go binary. No Node.js at runtime.
 
 Rules:
 
