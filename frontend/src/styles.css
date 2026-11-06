@@ -1547,10 +1547,12 @@ body {
   .popover.sheet {
     left: 0;
     right: 0;
-    bottom: 0;
+    /* Above the on-screen keyboard on iOS (see keyboard.js); 0 elsewhere. */
+    bottom: var(--kb-inset, 0px);
     width: 100%;
     max-width: none;
-    max-height: 85dvh;
+    max-height: min(85dvh, calc(var(--vv-height, 100dvh) - 16px));
+    overscroll-behavior: contain;
     overflow-y: auto;
     border-radius: 28px 28px 0 0;
     padding-bottom: env(safe-area-inset-bottom);
@@ -1568,6 +1570,10 @@ body {
     margin: 8px auto 0;
     border-radius: 2px;
     background: var(--line-strong);
+  }
+  /* The form sheet has no footer (Delete is in the details card). */
+  .popover.sheet .editor-body {
+    padding-bottom: 16px;
   }
   .popover.sheet .editor-bar {
     background: transparent;
