@@ -7,7 +7,8 @@ import { useMedia, PHONE } from '../useMedia.js';
 // calendar, so they do not close the popover here.
 // An element inside with [data-drag-handle] lets the user drag the card by hand.
 // Once dragged, the card stays where the user put it.
-export default function Popover({ anchor, onClose, className = '', children, label, modal = false }) {
+// `closing`: the card plays its closing animation and ignores the user.
+export default function Popover({ anchor, onClose, className = '', children, label, modal = false, closing = false }) {
   const ref = useRef(null);
   const dragged = useRef(null); // { left, top } after the user moved the card
   // Phones: the card is a sheet stuck to the bottom of the screen (CSS places it).
@@ -69,6 +70,7 @@ export default function Popover({ anchor, onClose, className = '', children, lab
   };
 
   useEffect(() => {
+    if (closing) return undefined;
     const onDown = (e) => {
       const t = e.target;
       if (ref.current?.contains(t)) return;
@@ -78,10 +80,19 @@ export default function Popover({ anchor, onClose, className = '', children, lab
     };
     document.addEventListener('pointerdown', onDown, true);
     return () => document.removeEventListener('pointerdown', onDown, true);
-  }, [onClose, modal]);
+  }, [onClose, modal, closing]);
 
   return (
-    <div ref={ref} className={`popover ${sheet ? 'sheet' : ''} ${className}`} role="dialog" aria-label={label} data-popover onPointerDown={onPointerDown}>
+    <div
+      ref={ref}
+      className={`popover ${sheet ? 'sheet' : ''} ${closing ? 'closing' : ''} ${className}`}
+      role="dialog"
+      aria-label={label}
+      aria-hidden={closing || undefined}
+      inert={closing || undefined}
+      data-popover
+      onPointerDown={onPointerDown}
+    >
       {children}
     </div>
   );

@@ -13,9 +13,9 @@ export function describeWhen(event, tz, settings) {
   return `${date(ws)}, ${T.formatTime(ws, settings.timeFormat)} – ${date(we)}, ${T.formatTime(we, settings.timeFormat)}`;
 }
 
-export default function EventDetails({ event, tz, settings, anchor, onClose, onEdit, onDelete }) {
+export default function EventDetails({ event, tz, settings, anchor, closing, onClose, onEdit, onDelete }) {
   return (
-    <Popover anchor={anchor} onClose={onClose} className="details" label="Event details">
+    <Popover anchor={anchor} onClose={onClose} closing={closing} className="details" label="Event details">
       <div className="details-bar" data-drag-handle>
         <button className="icon-btn sm" onClick={onEdit} aria-label="Edit event" title="Edit event">
           <Icon name="edit" size={20} />

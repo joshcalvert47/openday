@@ -1,15 +1,16 @@
 import { useEffect, useRef } from 'react';
 import Icon from '../icons.jsx';
 
-export default function Snackbar({ text, action, onAction, onClose }) {
+export default function Snackbar({ text, action, onAction, onClose, closing }) {
   const close = useRef(onClose);
   close.current = onClose;
   useEffect(() => {
+    if (closing) return undefined;
     const id = setTimeout(() => close.current(), 6000);
     return () => clearTimeout(id);
-  }, [text]);
+  }, [text, closing]);
   return (
-    <div className="snackbar" role="status">
+    <div className={`snackbar ${closing ? 'closing' : ''}`} role="status" inert={closing || undefined}>
       <span>{text}</span>
       {action && (
         <button

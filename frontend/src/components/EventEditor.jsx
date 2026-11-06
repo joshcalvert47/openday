@@ -9,9 +9,10 @@ import ReminderList from './ReminderList.jsx';
 import * as T from '../time.js';
 
 // Form to create or edit an event. Shown as a floating card next to the event,
-// or docked as a panel on the right side of the calendar.
+// or docked as a panel on the left side of the calendar.
+// `closing`: the floating card plays its closing animation (see Popover).
 export default function EventEditor({
-  draft, settings, tz, today, docked, sheet, anchor, onChange, onSave, onClose, onDelete, onToggleDock,
+  draft, settings, tz, today, docked, sheet, anchor, closing, onChange, onSave, onClose, onDelete, onToggleDock,
 }) {
   const titleRef = useRef(null);
   const [picker, setPicker] = useState(false);
@@ -177,7 +178,7 @@ export default function EventEditor({
   // the top bar, so the on-screen keyboard never hides Save.
   if (sheet) {
     return (
-      <Popover anchor={anchor} onClose={onClose} className="editor-popover" label={isNew ? 'New event' : 'Edit event'}>
+      <Popover anchor={anchor} onClose={onClose} closing={closing} className="editor-popover" label={isNew ? 'New event' : 'Edit event'}>
         <form className="editor" onSubmit={submit}>
           <div className="editor-bar">
             {closeButton}
@@ -232,7 +233,7 @@ export default function EventEditor({
 
   if (docked) return form;
   return (
-    <Popover anchor={anchor} onClose={onClose} className="editor-popover" label={isNew ? 'New event' : 'Edit event'}>
+    <Popover anchor={anchor} onClose={onClose} closing={closing} className="editor-popover" label={isNew ? 'New event' : 'Edit event'}>
       {form}
     </Popover>
   );

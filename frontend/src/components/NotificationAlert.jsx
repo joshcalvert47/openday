@@ -3,14 +3,14 @@ import Icon from '../icons.jsx';
 
 // In-page alert for event reminders ("Alerts" in notification settings,
 // or when the browser does not allow desktop notifications).
-export default function NotificationAlert({ alerts, describe, onClose }) {
+export default function NotificationAlert({ alerts, describe, onClose, closing }) {
   const okRef = useRef(null);
   useEffect(() => {
     okRef.current?.focus();
   }, [alerts.length]);
 
   return (
-    <div className="modal-backdrop alert-backdrop">
+    <div className={`modal-backdrop alert-backdrop ${closing ? 'closing' : ''}`} inert={closing || undefined}>
       <div className="modal alert" role="alertdialog" aria-label="Event reminder">
         {alerts.map(({ key, event }) => (
           <div key={key} className="alert-item">
