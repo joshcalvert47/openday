@@ -64,7 +64,7 @@ function layoutDay(segs) {
 }
 
 export default function TimeGrid({
-  days, events, settings, today, nowWall, tzLabel, newEventColor,
+  days, events, settings, today, nowWall, tzLabel, tzName, extraZones = [], newEventColor,
   onSurfacePointerDown, onCreate, onEventClick, onEventContext, onEventTimeChange, onDayClick, onInteract,
 }) {
   const scrollRef = useRef(null);
@@ -291,7 +291,12 @@ export default function TimeGrid({
   return (
     <div className="tg">
       <div className="tg-head">
-        <div className="tg-gutter-head">
+        {extraZones.map((z) => (
+          <div key={z.tz} className="tg-gutter-head extra" title={z.tz.replace(/_/g, ' ')}>
+            <span className="tg-tz">{z.label}</span>
+          </div>
+        ))}
+        <div className="tg-gutter-head" title={tzName?.replace(/_/g, ' ')}>
           <span className="tg-tz">{tzLabel}</span>
         </div>
         {days.map((d) => (
@@ -313,6 +318,16 @@ export default function TimeGrid({
         }}
         onContextMenu={(e) => lastPointer.current === 'touch' && e.preventDefault()}>
         <div className="tg-body" style={{ height: 24 * HOUR_PX }}>
+          {/* Other time zones: the time there at each hour line of the primary one. */}
+          {extraZones.map((z) => (
+            <div key={z.tz} className="tg-gutter extra" aria-hidden="true">
+              {Array.from({ length: 23 }, (_, i) => (
+                <span key={i} className="tg-hour" style={{ top: (i + 1) * HOUR_PX }}>
+                  {T.formatMinuteLabel((i + 1) * 60 + z.shift, tf)}
+                </span>
+              ))}
+            </div>
+          ))}
           <div className="tg-gutter">
             {Array.from({ length: 23 }, (_, i) => (
               <span key={i} className="tg-hour" style={{ top: (i + 1) * HOUR_PX }}>

@@ -72,6 +72,11 @@ How the app works:
   - Saving an event into a hidden calendar shows that calendar again.
   - Hidden calendars still send notifications (like the classic calendar).
 - Events are stored as UTC Unix milliseconds. The frontend shows them in the time zone from settings.
+- Time zones:
+  - Settings → Time zone: "Primary time zone" (`timeZone`, '' = device) and "Other time zones" (`otherTimeZones`, up to 5 IANA names, stored as a JSON array in the settings table).
+  - Day/week grid: each other time zone gets its own hour column left of the primary one (`extraZones` in `App.jsx`, `.tg-gutter.extra`). Not on phones (no room).
+  - Each event has `timeZone` (`time_zone` column; '' = the primary time zone). The event form shows its times in that zone. The form's time zone drop-down offers only the primary zone and the other time zones from settings (plus the event's own if it was removed from settings), and is hidden when there is no other choice. Changing it keeps the clock times (9am stays 9am, in the new zone), like the classic calendar.
+  - The grid always draws events in the primary time zone. The details card adds a line with the time in the event's zone when it differs.
 - Settings (date format, time format, time zone, default duration, default notification, notification settings, theme, animations, keyboard shortcuts) are stored in the database, so they follow the user across browsers.
 - Notifications (`frontend/src/notifications.js`):
   - Each event has `reminders`: up to 5 times in minutes before the start (0 to 4 weeks). Stored as a JSON array in the `reminders` column (added by `migrate` in `store.go` for older databases).

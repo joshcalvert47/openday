@@ -1664,6 +1664,41 @@ body {
   }
 }
 
+/* ---------- Other time zones ---------- */
+
+/* Extra hour columns in the day/week grid, left of the primary one. */
+.tg-gutter-head.extra,
+.tg-gutter.extra {
+  width: 56px;
+}
+.tg-gutter-head.extra {
+  padding-right: 6px;
+}
+.tg-gutter.extra .tg-hour {
+  right: 6px;
+}
+.other-zones {
+  gap: 8px;
+}
+.other-zone {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.other-zone .search-select {
+  flex: 1;
+  min-width: 0;
+}
+.other-zone-now {
+  flex: none;
+  min-width: 64px;
+  font-size: 12px;
+  color: var(--text-3);
+}
+.other-zones .settings-note {
+  margin: 0;
+}
+
 /* ---------- Calendars (sidebar list, settings) ---------- */
 
 .cal-section {

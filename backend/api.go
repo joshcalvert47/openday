@@ -56,7 +56,9 @@ var colorRe = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 
 type eventInput struct {
 	// CalendarID 0 (or missing) means the primary calendar.
-	CalendarID  int64     `json:"calendarId"`
+	CalendarID int64 `json:"calendarId"`
+	// TimeZone of the event's times ('' = the primary time zone).
+	TimeZone    string    `json:"timeZone"`
 	Title       string    `json:"title"`
 	Description string    `json:"description"`
 	Color       string    `json:"color"`
@@ -68,6 +70,7 @@ type eventInput struct {
 func (in eventInput) validate() (Event, error) {
 	e := Event{
 		CalendarID:  in.CalendarID,
+		TimeZone:    in.TimeZone,
 		Title:       strings.TrimSpace(in.Title),
 		Description: in.Description,
 		Color:       in.Color,
@@ -99,6 +102,8 @@ func (in eventInput) validate() (Event, error) {
 		return e, errors.New("description is too long")
 	case e.Color != "" && !colorRe.MatchString(e.Color):
 		return e, errors.New("color must look like #1a2b3c")
+	case !validTimeZone(e.TimeZone):
+		return e, errors.New("invalid timeZone")
 	}
 	return e, nil
 }
@@ -216,6 +221,25 @@ type calendarInput struct {
 	Color       *string `json:"color"`
 	TimeZone    *string `json:"timeZone"`
 	Hidden      *bool   `json:"hidden"`
+}
+
+const maxOtherTimeZones = 5
+
+// cleanTimeZones checks a list of other time zones and removes duplicates.
+func cleanTimeZones(in []string) ([]string, error) {
+	out := []string{}
+	for _, z := range in {
+		if z == "" || !validTimeZone(z) {
+			return nil, errors.New("invalid otherTimeZones")
+		}
+		if !contains(out, z) {
+			out = append(out, z)
+		}
+	}
+	if len(out) > maxOtherTimeZones {
+		return nil, errors.New("too many otherTimeZones")
+	}
+	return out, nil
 }
 
 // validTimeZone: empty (use the primary time zone) or a known IANA name.
@@ -368,6 +392,9 @@ type Settings struct {
 	Animations bool `json:"animations"`
 	// KeyboardShortcuts: single-key shortcuts (D, W, C, ?...) are on.
 	KeyboardShortcuts bool `json:"keyboardShortcuts"`
+	// OtherTimeZones: extra time zones (IANA names) shown next to the
+	// primary one in the day/week grid and offered in the event form.
+	OtherTimeZones []string `json:"otherTimeZones"`
 }
 
 var defaultSettings = Settings{
@@ -384,6 +411,7 @@ var defaultSettings = Settings{
 
 	Animations:        true,
 	KeyboardShortcuts: true,
+	OtherTimeZones:    []string{},
 }
 
 var (
@@ -450,6 +478,14 @@ func (a *API) loadSettings() (Settings, error) {
 	if v, ok := raw["keyboardShortcuts"]; ok {
 		s.KeyboardShortcuts = v == "true"
 	}
+	if v, ok := raw["otherTimeZones"]; ok {
+		var zones []string
+		if json.Unmarshal([]byte(v), &zones) == nil {
+			if zones, err := cleanTimeZones(zones); err == nil {
+				s.OtherTimeZones = zones
+			}
+		}
+	}
 	return s, nil
 }
 
@@ -478,6 +514,8 @@ func (a *API) putSettings(w http.ResponseWriter, r *http.Request) {
 
 		Animations        *bool `json:"animations"`
 		KeyboardShortcuts *bool `json:"keyboardShortcuts"`
+
+		OtherTimeZones *[]string `json:"otherTimeZones"`
 	}
 	if !readJSON(w, r, &in) {
 		return
@@ -549,6 +587,15 @@ func (a *API) putSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	if in.KeyboardShortcuts != nil {
 		values["keyboardShortcuts"] = strconv.FormatBool(*in.KeyboardShortcuts)
+	}
+	if in.OtherTimeZones != nil {
+		zones, err := cleanTimeZones(*in.OtherTimeZones)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		b, _ := json.Marshal(zones)
+		values["otherTimeZones"] = string(b)
 	}
 	if err := a.store.SetSettings(values); err != nil {
 		serverError(w, err)

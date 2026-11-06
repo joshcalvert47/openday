@@ -32,6 +32,12 @@ export default function EventDetails({ event, calendar, tz, settings, anchor, cl
         <div>
           <div className="details-title">{event.title || '(No title)'}</div>
           <div className="details-when">{describeWhen(event, tz, settings)}</div>
+          {/* Set in another time zone: also show the time there. */}
+          {event.timeZone && event.timeZone !== tz && (
+            <div className="details-when">
+              {describeWhen(event, event.timeZone, settings)} ({T.zoneCity(event.timeZone)})
+            </div>
+          )}
         </div>
       </div>
       {event.description && (

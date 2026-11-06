@@ -21,6 +21,7 @@ const fromWire = (e) => ({
 });
 const toWire = (e) => ({
   calendarId: e.calendarId || 0,
+  timeZone: e.timeZone || '',
   title: e.title,
   description: e.description,
   color: e.color,

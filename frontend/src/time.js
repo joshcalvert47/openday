@@ -58,6 +58,27 @@ export function fromWall(wall, tz) {
   return wall - offsetAt(guess, tz);
 }
 
+// Offset of the time zone from UTC at the given instant, in minutes.
+export const offsetMinutes = (tz, instant) => Math.round(offsetAt(instant, tz) / MINUTE);
+
+// "GMT+04", "GMT-05:30", "GMT+00" (short label above the hour column).
+export function gmtShort(tz, instant) {
+  const mins = offsetMinutes(tz, instant);
+  const abs = Math.abs(mins);
+  const m = abs % 60;
+  return `GMT${mins < 0 ? '-' : '+'}${pad(Math.floor(abs / 60))}${m ? `:${pad(m)}` : ''}`;
+}
+
+// "Asia/Tokyo" -> "Tokyo", "America/Argentina/Buenos_Aires" -> "Buenos Aires".
+export const zoneCity = (tz) => tz.split('/').pop().replace(/_/g, ' ');
+
+// "(GMT+09:00) Asia/Tokyo": for lists of time zones.
+export function zoneLabel(tz, instant) {
+  const mins = offsetMinutes(tz, instant);
+  const abs = Math.abs(mins);
+  return `(GMT${mins < 0 ? '-' : '+'}${pad(Math.floor(abs / 60))}:${pad(abs % 60)}) ${tz.replace(/_/g, ' ')}`;
+}
+
 // ---- Wall time math ----
 
 export const startOfDay = (w) => w - (((w % DAY) + DAY) % DAY);
@@ -114,6 +135,16 @@ export function formatHourLabel(hour, timeFormat) {
   if (timeFormat === '24h') return `${pad(hour)}:00`;
   const h12 = hour % 12 === 0 ? 12 : hour % 12;
   return `${h12} ${hour < 12 ? 'AM' : 'PM'}`;
+}
+
+// Label for a minute of the day in an extra hour column ("5:30 AM", "05:30").
+export function formatMinuteLabel(minutes, timeFormat) {
+  const m = ((minutes % (24 * 60)) + 24 * 60) % (24 * 60);
+  const h = Math.floor(m / 60);
+  const mm = m % 60;
+  if (!mm) return formatHourLabel(h, timeFormat);
+  if (timeFormat === '24h') return `${pad(h)}:${pad(mm)}`;
+  return `${h % 12 === 0 ? 12 : h % 12}:${pad(mm)} ${h < 12 ? 'AM' : 'PM'}`;
 }
 
 // "1 – 2pm", "11am – 1pm", "13:00 – 14:00"

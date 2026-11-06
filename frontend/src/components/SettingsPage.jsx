@@ -50,6 +50,63 @@ function Field({ label, children }) {
   );
 }
 
+const MAX_OTHER_ZONES = 5; // same limit as the backend
+
+// "Other time zones": shown as extra hour columns in the day/week grid, and
+// offered in the event form. Each can be changed or removed; the last field
+// adds one.
+function OtherTimeZones({ zones, primary, allZones, onChange }) {
+  const [addKey, setAddKey] = useState(0);
+  const now = Date.now();
+  const choicesFor = (current) =>
+    allZones.filter((o) => o.value === current || (o.value !== primary && !zones.includes(o.value)));
+  return (
+    <div className="field other-zones">
+      <span className="field-label">Other time zones</span>
+      {zones.map((z, i) => (
+        <div key={z} className="other-zone">
+          <SearchSelect
+            aria-label={`Time zone ${i + 1}`}
+            value={z}
+            options={choicesFor(z)}
+            onChange={(v) => onChange(zones.map((x) => (x === z ? v : x)))}
+          />
+          <span className="other-zone-now">{T.gmtShort(z, now)}</span>
+          <button
+            type="button"
+            className="icon-btn sm"
+            aria-label={`Remove ${z.replace(/_/g, ' ')}`}
+            title="Remove"
+            onClick={() => onChange(zones.filter((x) => x !== z))}
+          >
+            <Icon name="close" size={20} />
+          </button>
+        </div>
+      ))}
+      {zones.length < MAX_OTHER_ZONES ? (
+        <div className="other-zone">
+          <SearchSelect
+            key={addKey}
+            aria-label="Add time zone"
+            value=""
+            options={choicesFor(null)}
+            placeholder="Add time zone"
+            onChange={(v) => {
+              if (v) onChange([...zones, v]);
+              setAddKey((k) => k + 1);
+            }}
+          />
+        </div>
+      ) : (
+        <p className="settings-note">You can add up to {MAX_OTHER_ZONES} time zones.</p>
+      )}
+      <p className="settings-note">
+        They are shown next to your primary time zone in the day and week views, and you can pick them for an event.
+      </p>
+    </div>
+  );
+}
+
 // One group of the left menu ("General", "Add calendar", ...), like the
 // classic calendar: a header that opens or closes it, and its items.
 // Only one group is open at a time. The items are always on the page, so
@@ -282,6 +339,12 @@ export default function SettingsPage({
           <Field label="Primary time zone">
             <SearchSelect value={settings.timeZone} onChange={(timeZone) => onChange({ timeZone })} options={zoneOptions} />
           </Field>
+          <OtherTimeZones
+            zones={settings.otherTimeZones || []}
+            primary={primaryZone}
+            allZones={allZones}
+            onChange={(otherTimeZones) => onChange({ otherTimeZones })}
+          />
         </section>
 
         <section id="event-settings">

@@ -39,12 +39,33 @@ export default function EventEditor({
     if (!touch) titleRef.current?.focus();
   }, [draft.id, docked]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const ws = T.toWall(draft.start, tz);
-  const we = T.toWall(draft.end, tz);
+  // The form shows the times in the event's time zone ('' = the primary one).
+  const zone = draft.timeZone && draft.timeZone !== tz ? draft.timeZone : '';
+  const etz = zone || tz;
+  const ws = T.toWall(draft.start, etz);
+  const we = T.toWall(draft.end, etz);
   const day = T.startOfDay(ws);
   const tf = settings.timeFormat;
 
-  const setWall = (newWs, newWe) => onChange({ start: T.fromWall(newWs, tz), end: T.fromWall(newWe, tz) });
+  const setWall = (newWs, newWe) => onChange({ start: T.fromWall(newWs, etz), end: T.fromWall(newWe, etz) });
+
+  // Time zone choices: the primary one and the "Other time zones" from
+  // settings (plus the event's own, if it was removed from settings since).
+  const zoneChoices = [
+    '',
+    ...(settings.otherTimeZones || []).filter((z) => z !== tz),
+    ...(zone && !(settings.otherTimeZones || []).includes(zone) ? [zone] : []),
+  ];
+  const zoneOptions = zoneChoices.map((z) => ({
+    value: z,
+    label: `${T.zoneLabel(z || tz, draft.start)}${z ? '' : ' (primary)'}`,
+  }));
+  // Like the classic calendar: a new time zone keeps the clock times
+  // (9am stays 9am, now in the new zone).
+  const setZone = (z) => {
+    const ntz = z || tz;
+    onChange({ timeZone: z, start: T.fromWall(ws, ntz), end: T.fromWall(we, ntz) });
+  };
 
   const fmt = (t) => T.formatTime(t, tf, { compact: false });
 
@@ -138,6 +159,15 @@ export default function EventEditor({
           </div>
         </div>
       </div>
+
+      {zoneOptions.length > 1 && (
+        <div className="editor-row">
+          <Icon name="public" className="row-icon" size={20} />
+          <div className="editor-calendar">
+            <Select aria-label="Time zone" value={zone} options={zoneOptions} onChange={setZone} />
+          </div>
+        </div>
+      )}
 
       <div className="editor-row">
         <Icon name="notes" className="row-icon" size={20} />

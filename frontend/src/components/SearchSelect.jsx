@@ -15,8 +15,10 @@ export default function SearchSelect({ value, options, onChange, className = '',
   const [text, setText] = useState(null); // null = not typing
   const [active, setActive] = useState(0);
 
-  const selectedIndex = Math.max(0, options.findIndex((o) => o.value === value));
-  const current = options[selectedIndex];
+  // A value not in the options shows the placeholder (e.g. "Add time zone").
+  const found = options.findIndex((o) => o.value === value);
+  const selectedIndex = Math.max(0, found);
+  const current = found >= 0 ? options[found] : null;
 
   const start = () => {
     setActive(selectedIndex);

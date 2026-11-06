@@ -12,8 +12,11 @@ import (
 
 // Event is a calendar event. Start and End are stored as Unix milliseconds (UTC).
 type Event struct {
-	ID          int64  `json:"id"`
-	CalendarID  int64  `json:"calendarId"`
+	ID         int64 `json:"id"`
+	CalendarID int64 `json:"calendarId"`
+	// TimeZone the event's times were set in (IANA name), or '' for the
+	// primary time zone. Start and End are instants either way.
+	TimeZone    string `json:"timeZone"`
 	Title       string `json:"title"`
 	Description string `json:"description"`
 	// Color is empty when the event uses the color of its calendar.
@@ -124,6 +127,17 @@ func migrate(db *sql.DB) error {
 		return err
 	}
 	defer tx.Rollback()
+
+	// Events made before events had a time zone.
+	has, err = hasColumn(tx, "events", "time_zone")
+	if err != nil {
+		return err
+	}
+	if !has {
+		if _, err := tx.Exec(`ALTER TABLE events ADD COLUMN time_zone TEXT NOT NULL DEFAULT ''`); err != nil {
+			return err
+		}
+	}
 
 	// Calendar tables made before calendars had a time zone.
 	has, err = hasColumn(tx, "calendars", "time_zone")
@@ -243,7 +257,7 @@ func nowMs() int64              { return time.Now().UnixMilli() }
 // ListEvents returns events that overlap the range [from, to).
 func (s *Store) ListEvents(from, to time.Time) ([]Event, error) {
 	rows, err := s.db.Query(`
-		SELECT id, calendar_id, title, description, color, start_ms, end_ms, reminders
+		SELECT id, calendar_id, time_zone, title, description, color, start_ms, end_ms, reminders
 		FROM events
 		WHERE start_ms < ? AND end_ms > ?
 		ORDER BY start_ms, end_ms DESC, id`, toMs(to), toMs(from))
@@ -257,7 +271,7 @@ func (s *Store) ListEvents(from, to time.Time) ([]Event, error) {
 		var e Event
 		var start, end int64
 		var reminders string
-		if err := rows.Scan(&e.ID, &e.CalendarID, &e.Title, &e.Description, &e.Color, &start, &end, &reminders); err != nil {
+		if err := rows.Scan(&e.ID, &e.CalendarID, &e.TimeZone, &e.Title, &e.Description, &e.Color, &start, &end, &reminders); err != nil {
 			return nil, err
 		}
 		e.Start, e.End = fromMs(start), fromMs(end)
@@ -272,9 +286,9 @@ func (s *Store) GetEvent(id int64) (Event, error) {
 	var start, end int64
 	var reminders string
 	err := s.db.QueryRow(`
-		SELECT id, calendar_id, title, description, color, start_ms, end_ms, reminders
+		SELECT id, calendar_id, time_zone, title, description, color, start_ms, end_ms, reminders
 		FROM events WHERE id = ?`, id).
-		Scan(&e.ID, &e.CalendarID, &e.Title, &e.Description, &e.Color, &start, &end, &reminders)
+		Scan(&e.ID, &e.CalendarID, &e.TimeZone, &e.Title, &e.Description, &e.Color, &start, &end, &reminders)
 	if errors.Is(err, sql.ErrNoRows) {
 		return e, ErrNotFound
 	}
@@ -286,9 +300,9 @@ func (s *Store) GetEvent(id int64) (Event, error) {
 func (s *Store) CreateEvent(e Event) (Event, error) {
 	now := nowMs()
 	res, err := s.db.Exec(`
-		INSERT INTO events (calendar_id, title, description, color, start_ms, end_ms, reminders, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		e.CalendarID, e.Title, e.Description, e.Color, toMs(e.Start), toMs(e.End), encodeReminders(e.Reminders), now, now)
+		INSERT INTO events (calendar_id, time_zone, title, description, color, start_ms, end_ms, reminders, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		e.CalendarID, e.TimeZone, e.Title, e.Description, e.Color, toMs(e.Start), toMs(e.End), encodeReminders(e.Reminders), now, now)
 	if err != nil {
 		return e, err
 	}
@@ -302,9 +316,9 @@ func (s *Store) CreateEvent(e Event) (Event, error) {
 func (s *Store) UpdateEvent(e Event) (Event, error) {
 	res, err := s.db.Exec(`
 		UPDATE events
-		SET calendar_id = ?, title = ?, description = ?, color = ?, start_ms = ?, end_ms = ?, reminders = ?, updated_at = ?
+		SET calendar_id = ?, time_zone = ?, title = ?, description = ?, color = ?, start_ms = ?, end_ms = ?, reminders = ?, updated_at = ?
 		WHERE id = ?`,
-		e.CalendarID, e.Title, e.Description, e.Color, toMs(e.Start), toMs(e.End), encodeReminders(e.Reminders), nowMs(), e.ID)
+		e.CalendarID, e.TimeZone, e.Title, e.Description, e.Color, toMs(e.Start), toMs(e.End), encodeReminders(e.Reminders), nowMs(), e.ID)
 	if err != nil {
 		return e, err
 	}

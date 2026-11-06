@@ -33,6 +33,7 @@ const DEFAULT_SETTINGS = {
   defaultReminder: 30,
   animations: true,
   keyboardShortcuts: true,
+  otherTimeZones: [],
 };
 
 const VIEWS = ['day', 'week', 'month', 'year'];
@@ -342,6 +343,7 @@ export default function App() {
         ? { ...d, start, end }
         : {
             calendarId: primaryCal?.id || 0,
+            timeZone: '', // the primary time zone
             title: '',
             description: '',
             color: '', // calendar color
@@ -570,6 +572,20 @@ export default function App() {
     onDayClick: openDay,
   };
 
+  // Other time zones get their own hour column in the day/week grid
+  // (not on phones: no room). `shift`: minutes ahead of the primary time zone,
+  // measured in the middle of the first shown day.
+  const refInstant = range ? T.fromWall(range[0] + 12 * T.HOUR, tz) : now;
+  const extraZones = phone
+    ? []
+    : settings.otherTimeZones
+        .filter((z) => z !== tz)
+        .map((z) => ({
+          tz: z,
+          label: T.gmtShort(z, refInstant),
+          shift: T.offsetMinutes(z, refInstant) - T.offsetMinutes(tz, refInstant),
+        }));
+
   let main;
   if (view === 'day' || view === 'week') {
     const first = view === 'day' ? T.startOfDay(cursor) : T.startOfWeek(cursor);
@@ -581,6 +597,8 @@ export default function App() {
         days={days}
         newEventColor={newEventColor}
         tzLabel={gmtLabel(now, nowWall)}
+        tzName={tz}
+        extraZones={extraZones}
         onCreate={startDraft}
         onEventTimeChange={onEventTimeChange}
         onInteract={closePopups}

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -111,7 +112,7 @@ func TestSettings(t *testing.T) {
 	if err := json.Unmarshal([]byte(body), &s); err != nil {
 		t.Fatal(err)
 	}
-	if s != defaultSettings {
+	if !reflect.DeepEqual(s, defaultSettings) {
 		t.Fatalf("defaults: got %+v", s)
 	}
 
@@ -347,3 +348,38 @@ func TestCalendars(t *testing.T) {
 }
 
 func itoa(n int64) string { return strconv.FormatInt(n, 10) }
+
+func TestTimeZones(t *testing.T) {
+	srv := newTestServer(t)
+
+	// Other time zones: duplicates removed, order kept.
+	code, body := do(t, srv, "PUT", "/api/settings", `{"otherTimeZones":["Asia/Tokyo","America/New_York","Asia/Tokyo"]}`)
+	var s Settings
+	_ = json.Unmarshal([]byte(body), &s)
+	if code != http.StatusOK || !reflect.DeepEqual(s.OtherTimeZones, []string{"Asia/Tokyo", "America/New_York"}) {
+		t.Fatalf("other time zones: %d %s", code, body)
+	}
+	// Changing another setting keeps them.
+	_, body = do(t, srv, "PUT", "/api/settings", `{"theme":"dark"}`)
+	_ = json.Unmarshal([]byte(body), &s)
+	if len(s.OtherTimeZones) != 2 {
+		t.Fatalf("other time zones lost: %s", body)
+	}
+	for _, b := range []string{`{"otherTimeZones":["Mars/Base"]}`, `{"otherTimeZones":[""]}`,
+		`{"otherTimeZones":["UTC","Asia/Tokyo","Europe/Paris","Europe/Berlin","America/Chicago","Africa/Cairo"]}`} {
+		if code, _ := do(t, srv, "PUT", "/api/settings", b); code != http.StatusBadRequest {
+			t.Errorf("expected 400 for %s, got %d", b, code)
+		}
+	}
+
+	// Events keep their time zone.
+	code, body = do(t, srv, "POST", "/api/events",
+		`{"title":"A","timeZone":"Asia/Tokyo","start":"2026-11-06T12:00:00Z","end":"2026-11-06T13:00:00Z"}`)
+	if code != http.StatusCreated || !strings.Contains(body, `"timeZone":"Asia/Tokyo"`) {
+		t.Fatalf("event with time zone: %d %s", code, body)
+	}
+	if code, body := do(t, srv, "POST", "/api/events",
+		`{"title":"B","timeZone":"Mars/Base","start":"2026-11-06T12:00:00Z","end":"2026-11-06T13:00:00Z"}`); code != http.StatusBadRequest {
+		t.Fatalf("bad event time zone: %d %s", code, body)
+	}
+}
