@@ -28,6 +28,9 @@
   <img src="assets/screenshots/week.png" alt="OpenDay week view with several calendars and two time zones" width="900">
 </p>
 
+> [!WARNING]
+> OpenDay is in early development. Many features are missing and things may change or break between updates.
+
 ## 📸 Screenshots
 
 <table>
@@ -52,7 +55,7 @@
 You need [Docker](https://docs.docker.com/get-docker/).
 
 ```bash
-git clone https://github.com/nikolozlortki/openday.git
+git clone https://github.com/lortkipa/openday.git
 cd openday
 docker build -t openday .
 docker run -d --name openday -p 8080:8080 -v openday-data:/data --restart unless-stopped openday
