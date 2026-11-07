@@ -13,3 +13,6 @@ backend/openday
 *.db
 *.db-shm
 *.db-wal
+
+# Desktop app build output
+desktop/dist/

@@ -20,6 +20,7 @@
 <p align="center">
   <a href="#-quick-start">Quick start</a> ·
   <a href="#-features">Features</a> ·
+  <a href="#%EF%B8%8F-desktop-app">Desktop app</a> ·
   <a href="#-screenshots">Screenshots</a> ·
   <a href="#-for-developers">For developers</a>
 </p>
@@ -95,12 +96,36 @@ Your data stays in the volume.
 - Right-click an event to change its color or delete it.
 - Several calendars (for example "Work" and "Family"), each with its own name and color. Tick them in the sidebar to show or hide their events. Create, rename, recolor and delete calendars in Settings.
 - The event form can float or be docked to the side. On phones it slides up from the bottom.
-- Notifications: each event can have up to 5 reminders ("30 minutes before"). Set any number of minutes, hours, days or weeks (up to 4 weeks). Shown as desktop notifications (with Snooze) or as alerts in the page, with an optional sound. The calendar must be open in a browser tab.
+- Notifications: each event can have up to 5 reminders ("30 minutes before"). Set any number of minutes, hours, days or weeks (up to 4 weeks). Shown as desktop notifications (with Snooze) or as alerts in the page, with an optional sound. The calendar must be open in a browser tab, or the [desktop app](#%EF%B8%8F-desktop-app) must be running.
+- Live sync: a change in one browser tab, another computer or the desktop app shows everywhere else right away (no reload).
 - Settings: date format, time format, time zone, default event length, default notification, notification settings.
 - Several time zones: add up to 5 other time zones in Settings. They show as extra hour columns in the day and week views, and you can set an event's time zone to any of them.
 - Light, dark or device theme.
 - Works on phones: tap to add or open, hold an event to drag it or open its menu, swipe to change the day/week/month.
 - Keyboard shortcuts: `D` `W` `M` `Y` (views), `T` (today), `J`/`K` (next/previous), `C` (create).
+
+## 🖥️ Desktop app
+
+The desktop app (Linux, Windows, macOS) shows your OpenDay server in its own window.
+
+- Closing the window keeps the app running in the tray, so **notifications still show**.
+- Tray menu: Open, Reload, Change server, Start at login, Quit.
+- It has no data of its own. Everything is on your server, so it stays in sync with the web app.
+
+Build it (needs Node.js):
+
+```bash
+cd desktop && npm install && npm run dist
+```
+
+The installer is in `desktop/dist` (AppImage on Linux, `.exe` on Windows, `.dmg` on macOS). Build each one on its own system.
+On the first start, enter your server address (for example `http://localhost:8080`).
+
+Notes:
+
+- Linux AppImages need FUSE 2 (Fedora: `sudo dnf install fuse-libs`, Ubuntu: `sudo apt install libfuse2`).
+- The Snooze button works on Windows and macOS. On Linux it depends on your desktop (GNOME and KDE show it).
+- If the calendar is also open in a browser, both can show the same reminder.
 
 ## 🛠️ For developers
 
@@ -115,6 +140,8 @@ cd frontend && npm install && npm run dev
 ```
 
 Open http://localhost:5173. Run the backend tests with `cd backend && go test ./...`.
+
+Desktop app in development (with the backend running): `cd desktop && npm install && npm start`.
 
 AI coding agents should read [`AGENTS.md`](AGENTS.md) first.
 

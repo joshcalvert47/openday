@@ -13,7 +13,7 @@ When making product or UI decisions, the default answer is: **do what Google Cal
 
 ## Project status
 
-First working version: day/week/month/year views, events (create, edit, move, resize, color, delete), several calendars, notifications, settings, light/dark theme.
+First working version: day/week/month/year views, events (create, edit, move, resize, color, delete), several calendars, notifications, settings, light/dark theme, live sync between all open apps, desktop app (Electron).
 
 Commands:
 
@@ -25,6 +25,8 @@ Commands:
 | Frontend build | `cd frontend && npm run build` (type-checks, then builds) |
 | Frontend type check | `cd frontend && npm run typecheck` |
 | Docker image | `docker build -t openday .` |
+| Desktop app (dev) | `cd desktop && npm install && npm start` (needs a running server; enter its URL on first start) |
+| Desktop installer | `cd desktop && npm run dist` (output in `desktop/dist`; build each OS on that OS) |
 | Lint | none yet |
 
 ## Tech stack
@@ -52,10 +54,18 @@ Smaller decisions (made in the first version; change them only after asking the 
 | Icons | Inline SVG paths in `frontend/src/icons.tsx` (Material Design icon shapes, Apache 2.0). |
 | Time zones | Browser `Intl` API (`frontend/src/time.ts`). Go embeds `time/tzdata`. |
 | Final Docker image | `alpine`, runs as a non-root user, data in `/data`. |
+| Live sync | Server-Sent Events (`GET /api/stream`, `backend/live.go`). Standard library only, no WebSocket. |
+| Desktop app | Electron, in `desktop/`. Plain JavaScript (CommonJS, no build step). Packaged with `electron-builder`. It loads the web app from the user's server (no data of its own, no bundled server). |
 
 How the app works:
 
-- API lives under `/api` (`backend/api.go`): `GET/POST /api/events`, `PUT/DELETE /api/events/{id}`, `GET/POST /api/calendars`, `PUT/DELETE /api/calendars/{id}`, `GET/PUT /api/settings`, `GET /api/health`.
+- API lives under `/api` (`backend/api.go`): `GET/POST /api/events`, `PUT/DELETE /api/events/{id}`, `GET/POST /api/calendars`, `PUT/DELETE /api/calendars/{id}`, `GET/PUT /api/settings`, `GET /api/health`, `GET /api/stream`.
+- Live sync (`backend/live.go`, `frontend/src/live.ts`):
+  - Every open app keeps one Server-Sent Events stream (`GET /api/stream`). After each successful change the server sends `{"topic": "events" | "calendars" | "settings", "client": "..."}`. Deleting a calendar sends `calendars` and `events`.
+  - New write routes must be wrapped with `h.notify(handler, topics...)` in `Register`, or other apps will not see the change.
+  - The app sends `X-OpenDay-Client` (a random id per page load) with each request. A page skips messages with its own id (it already has the change).
+  - On a message the page loads that data again with the normal API (`useLiveUpdates` in `App.tsx`). After the stream reconnects, it loads everything again (changes may have been missed).
+  - Heartbeat every 25 seconds. On shutdown the hub closes all streams so `srv.Shutdown` does not wait.
 - Calendars (like "My calendars" in the classic calendar):
   - Table `calendars`: name, description, color, `time_zone`, `hidden`, `is_primary`. Every event has a `calendar_id`.
   - Calendar time zone: an IANA name, or `''` for "same as the primary time zone". It is saved and can be changed, but the calendar views still use the primary time zone (like the classic calendar).
@@ -92,6 +102,14 @@ How the app works:
   - Shown reminders and snoozes are kept in `localStorage`, so a reminder shows once even with several tabs open or after a reload.
   - Desktop notifications need HTTPS or `localhost` (browser rule). Headless Chromium always denies them, so tests stub `Notification.permission` and `showNotification`.
 - Small per-browser preferences (current view, sidebar open) are kept in `localStorage`.
+- Desktop app (`desktop/`):
+  - `main.cjs` (Electron main process), `preload.cjs` (bridge), `setup.html` (first start: server URL), `icons/` (PNGs made from `assets/logo.svg`; tray icons cannot be SVG).
+  - The server URL is saved in `config.json` in Electron's `userData` folder. Tray → "Change server…" opens the setup page again. If the server cannot be loaded, the setup page shows the error.
+  - Closing the window only hides it. The app stays in the tray and the page keeps running (`backgroundThrottling: false`), so the normal reminder code in `notifications.ts` keeps working. Tray → Quit really quits. Only one instance runs.
+  - The page talks to the app through `window.openDayDesktop` (`frontend/src/desktop.ts`; undefined in a browser): `notify` (native notification with a Snooze button), `showWindow` (used for in-page alerts, so they are seen), `onSnooze`. In the desktop app, notification permission counts as granted and the service worker is not used.
+  - The bridge only accepts calls from the server's origin. Links to other sites open in the normal browser.
+  - "Start at login" starts the app hidden (`--hidden`). Linux uses an autostart `.desktop` file; Windows and macOS use Electron's login item setting.
+  - If the hidden page crashes, it is loaded again.
 - Animations (CSS only, in the "Animations" section at the end of `styles.css`):
   - Sidebar (grows/shrinks on wide screens, slides in on tablets and phones), event details card, floating event form and right-click menu (fade and grow), phone sheets (slide up and down), docking the form (the panel grows while the sidebar shrinks), dialogs, snackbar.
   - Closing animations: `useExit` in `frontend/src/motion.ts` keeps a closing element on the page (class `closing`) until its animation ends. Its `key` is used as a React key with a prefix (`details-3`), so siblings never share a key.
@@ -129,6 +147,7 @@ openday/
 │   └── web/dist # frontend build is copied here before `go build` (only .gitkeep in git)
 ├── frontend/    # React app (Vite)
 │   └── public/logo.svg  # copy of assets/logo.svg (favicon + header logo)
+├── desktop/     # Electron desktop app (loads the web app from the server)
 ├── assets/      # project images (e.g. logo.svg, used in README)
 ├── Dockerfile   # builds frontend, then backend, into one image
 ├── README.md
@@ -138,6 +157,7 @@ openday/
 
 - The Dockerfile builds the frontend first, then the Go binary that embeds it.
 - The final image only needs the Go binary. No Node.js at runtime.
+- The desktop app is not part of the Docker image (`desktop` is in `.dockerignore`).
 
 Rules:
 
