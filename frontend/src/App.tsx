@@ -19,6 +19,7 @@ import Snackbar from './components/Snackbar';
 import NotificationAlert from './components/NotificationAlert';
 import { describeWhen } from './components/EventDetails';
 import { useNotifications } from './notifications';
+import { useLiveUpdates } from './live';
 import { useMedia, NARROW, PHONE, TOUCH } from './useMedia';
 import { useExit } from './motion';
 import type { Exit } from './motion';
@@ -137,6 +138,7 @@ export default function App() {
 
   const [calendars, setCalendars] = useState<Calendar[]>([]);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [eventsVersion, setEventsVersion] = useState(0); // goes up when events changed elsewhere
   const [draft, setDraft] = useState<Draft | null>(null); // event being created (no id) or edited
   const [editorAnchor, setEditorAnchor] = useState<Anchor | null>(null);
   const [details, setDetails] = useState<{ id: number; anchor: Anchor } | null>(null);
@@ -152,7 +154,9 @@ export default function App() {
   }, [formOpen]);
 
   const describe = (event: SlimEvent) => describeWhen(event, tz, settings);
-  const { alerts, dismissAlerts } = useNotifications({ settings, describe, changeKey: events });
+  // Load reminders again when events change (here or, in year view, elsewhere).
+  const notifyKey = useMemo(() => ({}), [events, eventsVersion]);
+  const { alerts, dismissAlerts } = useNotifications({ settings, describe, changeKey: notifyKey });
   const alertExit = useExit(alerts.length > 0 ? alerts : null);
   const alertBox = alertExit.shown && (
     <NotificationAlert
@@ -179,10 +183,25 @@ export default function App() {
   );
 
   // ---- Load settings and calendars ----
+  const loadSettings = useCallback(
+    () => api.getSettings().then((s) => setSettings({ ...DEFAULT_SETTINGS, ...s }), showError),
+    [showError],
+  );
+  const loadCalendars = useCallback(
+    () => api.listCalendars().then((list) => setCalendars(sortCalendars(list)), showError),
+    [showError],
+  );
   useEffect(() => {
-    api.getSettings().then((s) => setSettings({ ...DEFAULT_SETTINGS, ...s }), showError);
-    api.listCalendars().then((list) => setCalendars(sortCalendars(list)), showError);
-  }, [showError]);
+    loadSettings();
+    loadCalendars();
+  }, [loadSettings, loadCalendars]);
+
+  // Changes made in another tab, browser or the desktop app show up right away.
+  useLiveUpdates((topic) => {
+    if (topic === 'settings') loadSettings();
+    else if (topic === 'calendars') loadCalendars();
+    else setEventsVersion((v) => v + 1);
+  });
 
   const updateSettings = async (patch: Partial<Settings>) => {
     const before = settings;
@@ -288,7 +307,7 @@ export default function App() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rangeKey, showError]);
+  }, [rangeKey, eventsVersion, showError]);
 
   // Events with wall times, with the draft shown in place of the saved event.
   // Events of hidden calendars are left out (but not the one being edited).

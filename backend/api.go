@@ -16,22 +16,26 @@ import (
 // API holds the HTTP handlers for /api.
 type API struct {
 	store *Store
+	hub   *Hub
 }
 
-func NewAPI(store *Store) *API { return &API{store: store} }
+func NewAPI(store *Store, hub *Hub) *API { return &API{store: store, hub: hub} }
 
 func (a *API) Register(mux *http.ServeMux) {
+	h := a.hub
 	mux.HandleFunc("GET /api/health", a.health)
+	mux.HandleFunc("GET /api/stream", h.stream)
 	mux.HandleFunc("GET /api/events", a.listEvents)
-	mux.HandleFunc("POST /api/events", a.createEvent)
-	mux.HandleFunc("PUT /api/events/{id}", a.updateEvent)
-	mux.HandleFunc("DELETE /api/events/{id}", a.deleteEvent)
+	mux.HandleFunc("POST /api/events", h.notify(a.createEvent, "events"))
+	mux.HandleFunc("PUT /api/events/{id}", h.notify(a.updateEvent, "events"))
+	mux.HandleFunc("DELETE /api/events/{id}", h.notify(a.deleteEvent, "events"))
 	mux.HandleFunc("GET /api/calendars", a.listCalendars)
-	mux.HandleFunc("POST /api/calendars", a.createCalendar)
-	mux.HandleFunc("PUT /api/calendars/{id}", a.updateCalendar)
-	mux.HandleFunc("DELETE /api/calendars/{id}", a.deleteCalendar)
+	mux.HandleFunc("POST /api/calendars", h.notify(a.createCalendar, "calendars"))
+	mux.HandleFunc("PUT /api/calendars/{id}", h.notify(a.updateCalendar, "calendars"))
+	// Deleting a calendar also deletes its events.
+	mux.HandleFunc("DELETE /api/calendars/{id}", h.notify(a.deleteCalendar, "calendars", "events"))
 	mux.HandleFunc("GET /api/settings", a.getSettings)
-	mux.HandleFunc("PUT /api/settings", a.putSettings)
+	mux.HandleFunc("PUT /api/settings", h.notify(a.putSettings, "settings"))
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
 	})

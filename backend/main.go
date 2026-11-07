@@ -28,8 +28,9 @@ func main() {
 	}
 	defer store.Close()
 
+	hub := NewHub()
 	mux := http.NewServeMux()
-	NewAPI(store).Register(mux)
+	NewAPI(store, hub).Register(mux)
 	mux.Handle("/", frontendHandler())
 
 	srv := &http.Server{
@@ -37,6 +38,8 @@ func main() {
 		Handler:           mux,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
+	// Live update streams stay open forever; end them so Shutdown does not wait.
+	srv.RegisterOnShutdown(hub.Close)
 
 	go func() {
 		log.Printf("OpenDay listening on %s (database: %s)", addr, dbPath)

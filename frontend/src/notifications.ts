@@ -4,10 +4,12 @@
 //   and shows them as desktop notifications or as an alert in the page.
 // - Desktop notifications have a "Snooze" button. A snoozed notification shows
 //   again "snoozeBefore" minutes before the event.
-// Nothing is sent by the server, so notifications only show while a tab is open.
+// Nothing is sent by the server, so notifications only show while a tab is open,
+// or while the desktop app runs (it keeps its page running in the tray when the window is closed).
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from './api';
+import { desktop } from './desktop';
 import * as T from './time';
 import type { CalendarEvent, Settings } from './types';
 
@@ -64,11 +66,13 @@ function writeStore(key: string, value: unknown) {
 
 // "unsupported", "default", "granted" or "denied".
 export function notificationPermission(): Permission {
+  if (desktop) return 'granted'; // the desktop app shows native notifications itself
   if (typeof Notification === 'undefined' || !window.isSecureContext) return 'unsupported';
   return Notification.permission;
 }
 
 export async function requestNotificationPermission(): Promise<Permission> {
+  if (desktop) return 'granted';
   if (notificationPermission() === 'unsupported') return 'unsupported';
   try {
     return await Notification.requestPermission();
@@ -79,6 +83,7 @@ export async function requestNotificationPermission(): Promise<Permission> {
 
 let swRegistration: ServiceWorkerRegistration | null = null;
 function registerServiceWorker() {
+  if (desktop) return; // the desktop app has its own notifications with Snooze
   if (!('serviceWorker' in navigator) || !window.isSecureContext) return;
   navigator.serviceWorker.register('/sw.js').then(
     (reg) => {
@@ -135,6 +140,10 @@ export function playChime() {
 async function showDesktop(item: NotificationItem, body: string) {
   const { event } = item;
   const title = event.title || '(No title)';
+  if (desktop) {
+    desktop.notify({ title, body, tag: item.key, data: { key: item.key, event } });
+    return;
+  }
   const options: NotificationOptions = {
     body,
     tag: item.key,
@@ -195,7 +204,10 @@ export function useNotifications({
   const show = (item: NotificationItem) => {
     const { settings: s, describe: d } = latest.current;
     if (s.notificationSound) playChime();
-    const toAlert = () => setAlerts((list) => [...list, item]);
+    const toAlert = () => {
+      setAlerts((list) => [...list, item]);
+      desktop?.showWindow(); // the window may be closed to the tray
+    };
     if (s.notifications === 'desktop' && notificationPermission() === 'granted') {
       // If the browser refuses, the user still sees the alert in the page.
       showDesktop(item, d(item.event)).catch(toAlert);
@@ -244,6 +256,7 @@ export function useNotifications({
     registerServiceWorker();
     const onMessage = (e: MessageEvent) => e.data?.type === 'openday-snooze' && snooze(e.data.data);
     navigator.serviceWorker?.addEventListener('message', onMessage);
+    const offDesktop = desktop?.onSnooze((data) => snooze(data as NotificationItem));
     const unlock = () => {
       if (latest.current.settings.notificationSound) audioContext();
     };
@@ -251,6 +264,7 @@ export function useNotifications({
     window.addEventListener('keydown', unlock, true);
     return () => {
       navigator.serviceWorker?.removeEventListener('message', onMessage);
+      offDesktop?.();
       window.removeEventListener('pointerdown', unlock, true);
       window.removeEventListener('keydown', unlock, true);
     };

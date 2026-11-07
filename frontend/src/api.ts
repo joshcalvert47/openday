@@ -1,5 +1,6 @@
 // Small wrapper around the Go JSON API.
 
+import { CLIENT_ID } from './live';
 import type { Calendar, CalendarEvent, CalendarPatch, Draft, Settings } from './types';
 
 // An event as the API sends it: times are ISO strings.
@@ -12,7 +13,8 @@ type WireEvent = Omit<CalendarEvent, 'start' | 'end' | 'reminders'> & {
 async function request<R>(method: string, path: string, body?: unknown): Promise<R> {
   const res = await fetch(path, {
     method,
-    headers: body ? { 'Content-Type': 'application/json' } : undefined,
+    // The client id lets the live stream tell other apps who made a change.
+    headers: body ? { 'Content-Type': 'application/json', 'X-OpenDay-Client': CLIENT_ID } : { 'X-OpenDay-Client': CLIENT_ID },
     body: body ? JSON.stringify(body) : undefined,
   });
   if (res.status === 204) return null as R;
